@@ -1,0 +1,12 @@
+---
+extends: default
+ignore: |
+  .venv
+rules:
+  line-length: disable
+  truthy: disable
+  comments: disable
+  indentation:
+    spaces: 2
+    indent-sequences: true
+    check-multi-line-strings: false

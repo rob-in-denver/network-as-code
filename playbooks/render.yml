@@ -1,0 +1,48 @@
+---
+- name: Render device configuration from the YAML source of truth
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  tasks:
+    - name: Load the VXLAN fabric
+      ansible.builtin.include_vars:
+        file: "{{ playbook_dir }}/../data/fabric.yml"
+        name: fabric
+
+    - name: Load the DMVPN overlay
+      ansible.builtin.include_vars:
+        file: "{{ playbook_dir }}/../data/dmvpn.yml"
+        name: dmvpn
+
+    - name: Create render directories
+      ansible.builtin.file:
+        path: "{{ playbook_dir }}/../rendered/{{ item }}"
+        state: directory
+        mode: "0755"
+      loop:
+        - nxos
+        - iosxe
+
+    - name: Render NX-OS fabric devices
+      ansible.builtin.template:
+        src: "{{ playbook_dir }}/../templates/nxos/device.j2"
+        dest: "{{ playbook_dir }}/../rendered/nxos/{{ item.hostname }}.cfg"
+        mode: "0644"
+      loop: "{{ fabric.devices }}"
+      vars:
+        device: "{{ item }}"
+
+    - name: Render IOS-XE DMVPN routers
+      ansible.builtin.template:
+        src: "{{ playbook_dir }}/../templates/iosxe/dmvpn.j2"
+        dest: "{{ playbook_dir }}/../rendered/iosxe/{{ item.hostname }}.cfg"
+        mode: "0644"
+      loop: "{{ dmvpn.hubs + dmvpn.spokes }}"
+      vars:
+        device: "{{ item }}"
+
+    - name: Collapse extra blank lines in rendered configs
+      ansible.builtin.command: python3 scripts/tidy_rendered.py
+      args:
+        chdir: "{{ playbook_dir }}/.."
+      changed_when: false

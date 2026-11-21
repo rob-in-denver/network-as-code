@@ -1,0 +1,33 @@
+---
+name: network-as-code
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements.txt
+      - name: Install tooling
+        run: python -m pip install -r requirements.txt
+      - name: Lint YAML
+        run: yamllint .
+      - name: Render configs from the source of truth
+        run: ansible-playbook playbooks/render.yml
+      - name: Unit-test rendered configs
+        run: python -m pytest -q
+      - name: Confirm committed renders match
+        run: |
+          git add -N rendered
+          git diff --exit-code -- rendered

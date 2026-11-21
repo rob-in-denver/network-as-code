@@ -1,0 +1,423 @@
+---
+# Source of truth for a two-site VXLAN BGP EVPN fabric.
+# Render with: ansible-playbook playbooks/render.yml
+name: mesa-multisite
+anycast_gateway_mac: "0000.2222.3333"
+ospf_process: UNDERLAY
+ospf_area: "0.0.0.0"
+mtu: 9216
+sites:
+  - id: a
+    name: site-a
+    asn: 65011
+    multisite_id: 65011
+    multisite_vip: "10.100.1.1"
+  - id: b
+    name: site-b
+    asn: 65012
+    multisite_id: 65012
+    multisite_vip: "10.100.2.1"
+vrfs:
+  - name: APP
+    vni: 50001
+    vlan: 901
+vnis:
+  - id: 10010
+    vlan: 10
+    name: APP-WEB
+    type: l2
+    vrf: APP
+    gateway: "10.10.10.1"
+    prefix: 24
+  - id: 10020
+    vlan: 20
+    name: APP-DB
+    type: l2
+    vrf: APP
+    gateway: "10.20.20.1"
+    prefix: 24
+  - id: 50001
+    vlan: 901
+    name: APP-L3
+    type: l3
+    vrf: APP
+devices:
+  - hostname: spine-a1
+    role: spine
+    site: a
+    router_id: "10.0.0.11"
+    interfaces:
+      - name: "Ethernet1/1"
+        description: leaf-a1
+        address: "10.1.11.0"
+        prefix: 31
+        role: underlay
+        peer: leaf-a1
+        peer_interface: "Ethernet1/1"
+        peer_address: "10.1.11.1"
+      - name: "Ethernet1/2"
+        description: leaf-a2
+        address: "10.1.11.2"
+        prefix: 31
+        role: underlay
+        peer: leaf-a2
+        peer_interface: "Ethernet1/1"
+        peer_address: "10.1.11.3"
+      - name: "Ethernet1/3"
+        description: bgw-a1
+        address: "10.1.11.4"
+        prefix: 31
+        role: underlay
+        peer: bgw-a1
+        peer_interface: "Ethernet1/1"
+        peer_address: "10.1.11.5"
+      - name: "Ethernet1/4"
+        description: bgw-a2
+        address: "10.1.11.6"
+        prefix: 31
+        role: underlay
+        peer: bgw-a2
+        peer_interface: "Ethernet1/1"
+        peer_address: "10.1.11.7"
+  - hostname: spine-a2
+    role: spine
+    site: a
+    router_id: "10.0.0.12"
+    interfaces:
+      - name: "Ethernet1/1"
+        description: leaf-a1
+        address: "10.1.12.0"
+        prefix: 31
+        role: underlay
+        peer: leaf-a1
+        peer_interface: "Ethernet1/2"
+        peer_address: "10.1.12.1"
+      - name: "Ethernet1/2"
+        description: leaf-a2
+        address: "10.1.12.2"
+        prefix: 31
+        role: underlay
+        peer: leaf-a2
+        peer_interface: "Ethernet1/2"
+        peer_address: "10.1.12.3"
+      - name: "Ethernet1/3"
+        description: bgw-a1
+        address: "10.1.12.4"
+        prefix: 31
+        role: underlay
+        peer: bgw-a1
+        peer_interface: "Ethernet1/2"
+        peer_address: "10.1.12.5"
+      - name: "Ethernet1/4"
+        description: bgw-a2
+        address: "10.1.12.6"
+        prefix: 31
+        role: underlay
+        peer: bgw-a2
+        peer_interface: "Ethernet1/2"
+        peer_address: "10.1.12.7"
+  - hostname: leaf-a1
+    role: leaf
+    site: a
+    router_id: "10.0.0.21"
+    vtep: "10.1.1.21"
+    interfaces:
+      - name: "Ethernet1/1"
+        description: spine-a1
+        address: "10.1.11.1"
+        prefix: 31
+        role: underlay
+        peer: spine-a1
+        peer_interface: "Ethernet1/1"
+        peer_address: "10.1.11.0"
+      - name: "Ethernet1/2"
+        description: spine-a2
+        address: "10.1.12.1"
+        prefix: 31
+        role: underlay
+        peer: spine-a2
+        peer_interface: "Ethernet1/1"
+        peer_address: "10.1.12.0"
+    host_ports:
+      - name: "Ethernet1/10"
+        vlan: 10
+        description: "app web server"
+      - name: "Ethernet1/11"
+        vlan: 20
+        description: "app db server"
+  - hostname: leaf-a2
+    role: leaf
+    site: a
+    router_id: "10.0.0.22"
+    vtep: "10.1.1.22"
+    interfaces:
+      - name: "Ethernet1/1"
+        description: spine-a1
+        address: "10.1.11.3"
+        prefix: 31
+        role: underlay
+        peer: spine-a1
+        peer_interface: "Ethernet1/2"
+        peer_address: "10.1.11.2"
+      - name: "Ethernet1/2"
+        description: spine-a2
+        address: "10.1.12.3"
+        prefix: 31
+        role: underlay
+        peer: spine-a2
+        peer_interface: "Ethernet1/2"
+        peer_address: "10.1.12.2"
+    host_ports:
+      - name: "Ethernet1/10"
+        vlan: 10
+        description: "app web server"
+  - hostname: bgw-a1
+    role: bgw
+    site: a
+    router_id: "10.0.0.31"
+    vtep: "10.1.1.31"
+    interfaces:
+      - name: "Ethernet1/1"
+        description: spine-a1
+        address: "10.1.11.5"
+        prefix: 31
+        role: underlay
+        peer: spine-a1
+        peer_interface: "Ethernet1/3"
+        peer_address: "10.1.11.4"
+      - name: "Ethernet1/2"
+        description: spine-a2
+        address: "10.1.12.5"
+        prefix: 31
+        role: underlay
+        peer: spine-a2
+        peer_interface: "Ethernet1/3"
+        peer_address: "10.1.12.4"
+      - name: "Ethernet1/10"
+        description: bgw-b1
+        address: "172.31.0.0"
+        prefix: 31
+        role: dci
+        peer: bgw-b1
+        peer_interface: "Ethernet1/10"
+        peer_address: "172.31.0.1"
+        peer_as: 65012
+  - hostname: bgw-a2
+    role: bgw
+    site: a
+    router_id: "10.0.0.32"
+    vtep: "10.1.1.32"
+    interfaces:
+      - name: "Ethernet1/1"
+        description: spine-a1
+        address: "10.1.11.7"
+        prefix: 31
+        role: underlay
+        peer: spine-a1
+        peer_interface: "Ethernet1/4"
+        peer_address: "10.1.11.6"
+      - name: "Ethernet1/2"
+        description: spine-a2
+        address: "10.1.12.7"
+        prefix: 31
+        role: underlay
+        peer: spine-a2
+        peer_interface: "Ethernet1/4"
+        peer_address: "10.1.12.6"
+      - name: "Ethernet1/10"
+        description: bgw-b2
+        address: "172.31.0.2"
+        prefix: 31
+        role: dci
+        peer: bgw-b2
+        peer_interface: "Ethernet1/10"
+        peer_address: "172.31.0.3"
+        peer_as: 65012
+  - hostname: spine-b1
+    role: spine
+    site: b
+    router_id: "10.0.1.11"
+    interfaces:
+      - name: "Ethernet1/1"
+        description: leaf-b1
+        address: "10.2.11.0"
+        prefix: 31
+        role: underlay
+        peer: leaf-b1
+        peer_interface: "Ethernet1/1"
+        peer_address: "10.2.11.1"
+      - name: "Ethernet1/2"
+        description: leaf-b2
+        address: "10.2.11.2"
+        prefix: 31
+        role: underlay
+        peer: leaf-b2
+        peer_interface: "Ethernet1/1"
+        peer_address: "10.2.11.3"
+      - name: "Ethernet1/3"
+        description: bgw-b1
+        address: "10.2.11.4"
+        prefix: 31
+        role: underlay
+        peer: bgw-b1
+        peer_interface: "Ethernet1/1"
+        peer_address: "10.2.11.5"
+      - name: "Ethernet1/4"
+        description: bgw-b2
+        address: "10.2.11.6"
+        prefix: 31
+        role: underlay
+        peer: bgw-b2
+        peer_interface: "Ethernet1/1"
+        peer_address: "10.2.11.7"
+  - hostname: spine-b2
+    role: spine
+    site: b
+    router_id: "10.0.1.12"
+    interfaces:
+      - name: "Ethernet1/1"
+        description: leaf-b1
+        address: "10.2.12.0"
+        prefix: 31
+        role: underlay
+        peer: leaf-b1
+        peer_interface: "Ethernet1/2"
+        peer_address: "10.2.12.1"
+      - name: "Ethernet1/2"
+        description: leaf-b2
+        address: "10.2.12.2"
+        prefix: 31
+        role: underlay
+        peer: leaf-b2
+        peer_interface: "Ethernet1/2"
+        peer_address: "10.2.12.3"
+      - name: "Ethernet1/3"
+        description: bgw-b1
+        address: "10.2.12.4"
+        prefix: 31
+        role: underlay
+        peer: bgw-b1
+        peer_interface: "Ethernet1/2"
+        peer_address: "10.2.12.5"
+      - name: "Ethernet1/4"
+        description: bgw-b2
+        address: "10.2.12.6"
+        prefix: 31
+        role: underlay
+        peer: bgw-b2
+        peer_interface: "Ethernet1/2"
+        peer_address: "10.2.12.7"
+  - hostname: leaf-b1
+    role: leaf
+    site: b
+    router_id: "10.0.1.21"
+    vtep: "10.1.2.21"
+    interfaces:
+      - name: "Ethernet1/1"
+        description: spine-b1
+        address: "10.2.11.1"
+        prefix: 31
+        role: underlay
+        peer: spine-b1
+        peer_interface: "Ethernet1/1"
+        peer_address: "10.2.11.0"
+      - name: "Ethernet1/2"
+        description: spine-b2
+        address: "10.2.12.1"
+        prefix: 31
+        role: underlay
+        peer: spine-b2
+        peer_interface: "Ethernet1/1"
+        peer_address: "10.2.12.0"
+    host_ports:
+      - name: "Ethernet1/10"
+        vlan: 10
+        description: "app web server"
+  - hostname: leaf-b2
+    role: leaf
+    site: b
+    router_id: "10.0.1.22"
+    vtep: "10.1.2.22"
+    interfaces:
+      - name: "Ethernet1/1"
+        description: spine-b1
+        address: "10.2.11.3"
+        prefix: 31
+        role: underlay
+        peer: spine-b1
+        peer_interface: "Ethernet1/2"
+        peer_address: "10.2.11.2"
+      - name: "Ethernet1/2"
+        description: spine-b2
+        address: "10.2.12.3"
+        prefix: 31
+        role: underlay
+        peer: spine-b2
+        peer_interface: "Ethernet1/2"
+        peer_address: "10.2.12.2"
+    host_ports:
+      - name: "Ethernet1/11"
+        vlan: 20
+        description: "app db server"
+  - hostname: bgw-b1
+    role: bgw
+    site: b
+    router_id: "10.0.1.31"
+    vtep: "10.1.2.31"
+    interfaces:
+      - name: "Ethernet1/1"
+        description: spine-b1
+        address: "10.2.11.5"
+        prefix: 31
+        role: underlay
+        peer: spine-b1
+        peer_interface: "Ethernet1/3"
+        peer_address: "10.2.11.4"
+      - name: "Ethernet1/2"
+        description: spine-b2
+        address: "10.2.12.5"
+        prefix: 31
+        role: underlay
+        peer: spine-b2
+        peer_interface: "Ethernet1/3"
+        peer_address: "10.2.12.4"
+      - name: "Ethernet1/10"
+        description: bgw-a1
+        address: "172.31.0.1"
+        prefix: 31
+        role: dci
+        peer: bgw-a1
+        peer_interface: "Ethernet1/10"
+        peer_address: "172.31.0.0"
+        peer_as: 65011
+  - hostname: bgw-b2
+    role: bgw
+    site: b
+    router_id: "10.0.1.32"
+    vtep: "10.1.2.32"
+    interfaces:
+      - name: "Ethernet1/1"
+        description: spine-b1
+        address: "10.2.11.7"
+        prefix: 31
+        role: underlay
+        peer: spine-b1
+        peer_interface: "Ethernet1/4"
+        peer_address: "10.2.11.6"
+      - name: "Ethernet1/2"
+        description: spine-b2
+        address: "10.2.12.7"
+        prefix: 31
+        role: underlay
+        peer: spine-b2
+        peer_interface: "Ethernet1/4"
+        peer_address: "10.2.12.6"
+      - name: "Ethernet1/10"
+        description: bgw-a2
+        address: "172.31.0.3"
+        prefix: 31
+        role: dci
+        peer: bgw-a2
+        peer_interface: "Ethernet1/10"
+        peer_address: "172.31.0.2"
+        peer_as: 65011

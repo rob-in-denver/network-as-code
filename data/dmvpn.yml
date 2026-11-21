@@ -1,0 +1,80 @@
+---
+phase: 3
+fvrf: WAN
+ivrf: CORP
+tunnel_mask: 255.255.255.0
+mtu: 1400
+mss: 1360
+psk_placeholder: REDACTED-FROM-VAULT
+ike:
+  proposal: DMVPN-PROPOSAL
+  policy: DMVPN-POLICY
+  keyring: DMVPN-KEYRING
+  profile: DMVPN-IKEPROF
+  encryption: aes-gcm-256
+  prf: sha256
+  group: 19
+  dpd: "40 5"
+ipsec:
+  transform: DMVPN-TS
+  profile: DMVPN-IPSEC
+  gcm_bits: 256
+nhrp:
+  network_id: 101
+  holdtime: 600
+eigrp:
+  name: OVERLAY
+  asn: 101
+hubs:
+  - hostname: hub-den1
+    role: hub
+    tunnel_address: 10.255.101.1
+    nbma: 203.0.113.11
+    wan_interface: GigabitEthernet1
+    wan_address: 203.0.113.11
+    wan_mask: 255.255.255.0
+    wan_gateway: 203.0.113.1
+    lan_interface: GigabitEthernet2
+    lan_address: 10.1.0.1
+    lan_mask: 255.255.255.0
+    lan_prefix: 10.1.0.0/24
+    eigrp_networks:
+      - network: 10.255.101.0
+        wildcard: 0.0.0.255
+      - network: 10.1.0.0
+        wildcard: 0.0.0.255
+spokes:
+  - hostname: spoke-north
+    role: spoke
+    tunnel_address: 10.255.101.11
+    nbma: 198.51.100.21
+    wan_interface: GigabitEthernet1
+    wan_address: 198.51.100.21
+    wan_mask: 255.255.255.0
+    wan_gateway: 198.51.100.1
+    lan_interface: GigabitEthernet2
+    lan_address: 10.11.0.1
+    lan_mask: 255.255.255.0
+    lan_prefix: 10.11.0.0/24
+    eigrp_networks:
+      - network: 10.255.101.0
+        wildcard: 0.0.0.255
+      - network: 10.11.0.0
+        wildcard: 0.0.0.255
+  - hostname: spoke-south
+    role: spoke
+    tunnel_address: 10.255.101.12
+    nbma: 192.0.2.31
+    wan_interface: GigabitEthernet1
+    wan_address: 192.0.2.31
+    wan_mask: 255.255.255.0
+    wan_gateway: 192.0.2.1
+    lan_interface: GigabitEthernet2
+    lan_address: 10.12.0.1
+    lan_mask: 255.255.255.0
+    lan_prefix: 10.12.0.0/24
+    eigrp_networks:
+      - network: 10.255.101.0
+        wildcard: 0.0.0.255
+      - network: 10.12.0.0
+        wildcard: 0.0.0.255
