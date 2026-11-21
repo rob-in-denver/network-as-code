@@ -6,7 +6,7 @@ A small, real example of generating Cisco configuration from a YAML source of tr
 
 - a two-site VXLAN BGP EVPN fabric on NX-OS
 - a DMVPN Phase 3 hub and spoke on IOS-XE, with IKEv2, a front-door VRF, named EIGRP, and per-spoke route filtering
-- an IPv4-only Enterprise Core spanning a 6-node MPLS SP Core (`2 × XRv9000` P/RR + `4 × Cat8000v` PE), a Data Center (`DC-R1` CSR1000v DMVPN Hub + `DC-R2..DC-R4` `IOL-XE` + `DC-SW1..DC-SW4` `IOL-L2`), and a Cisco Catalyst SD-WAN stack (`SDWAN-MGR`, `SDWAN-VAL`, `SDWAN-CTRL`, `DC-CEDGE1`, `DC-CEDGE2`)
+- an IPv4-only Enterprise Core spanning one `ISP` node (the whole internet), a 6-node MPLS SP Core (`2 × XRv9000` P/RR + `4 × Cat8000v` PE), a Data Center (`DC-R1` CSR1000v DMVPN hub and `DC-R4` on the ISP, `DC-R2`/`DC-R3` MPLS-only, `DC-SW1..DC-SW4` `IOL-L2`), spoke sites with ISP + MPLS transports, and a Cisco SD-WAN 20.12 stack (`SDWAN-MGR`, `SDWAN-VAL`, `SDWAN-CTRL`, vEdge 20.12.8 `DC-CEDGE1/2` and `S1..S3-EDGE`)
 
 Ansible and Jinja render the device configs. Pytest checks them. GitHub Actions runs the same steps and does not log into any device.
 
@@ -33,21 +33,22 @@ python -m nac.validate
 ```
 data/fabric.yml              VXLAN fabric source of truth
 data/dmvpn.yml               DMVPN source of truth
-data/enterprise_core.yml     6-node SP core + DC (4R/4SW/2cEdge) + SD-WAN source of truth
+data/enterprise_core.yml     ISP + 6-node SP core + DC (4R/4SW) + SD-WAN 20.12 (controllers + vEdges) source of truth
 templates/nxos/device.j2     NX-OS Jinja template
 templates/iosxe/dmvpn.j2     IOS-XE DMVPN Jinja template
 templates/iosxr/sp_p.j2      IOS XR SP P/RR Jinja template
 templates/iosxe/sp_pe.j2     Cat8000v SP PE Jinja template
 templates/iosxe/dc_router.j2 Data Center router + DC-R1 DMVPN hub Jinja template
 templates/iosxe/dc_switch.j2 Data Center distribution/access switch Jinja template
-templates/sdwan/cedge.j2     Cat8000v SD-WAN cEdge cloud-init Jinja template
+templates/iosxe/isp.j2       Single ISP node (connected routes only) Jinja template
+templates/sdwan/vedge.j2     vEdge Cloud 20.12 cloud-init (vinitparam + zcloud.xml) Jinja template
 templates/sdwan/controller.j2 SD-WAN Manager/Validator/Controller cloud-init template
 playbooks/render.yml         Ansible playbook that renders all designs
 rendered/nxos/               Generated NX-OS, committed
 rendered/iosxe/              Generated DMVPN IOS-XE, committed
 rendered/iosxr/              Generated IOS XR SP Core, committed
-rendered/enterprise/         Generated PE + Data Center IOS-XE/IOL, committed
-rendered/sdwan/              Generated SD-WAN cEdge + controller cloud-init, committed
+rendered/enterprise/         Generated ISP + PE + Data Center IOS-XE/IOL, committed
+rendered/sdwan/              Generated SD-WAN vEdge + controller cloud-init, committed
 inventory/hosts.yml          Documentation inventory (TEST-NET addresses)
 nac/validate.py              Offline checks against the source of truth
 nac/collect.py               Optional Netmiko collector, not used by CI
@@ -96,12 +97,14 @@ NBMA addresses are documentation ranges (`203.0.113.0/24`, `198.51.100.0/24`, `1
 
 | Tier | Nodes | Image / Platform | Routing & Role |
 | --- | --- | --- | --- |
+| Internet | `ISP` | `iol-xe` | One node is the whole internet: DC-R1 Gi3 `172.16.0.248/30`, DC-R4 Et1/1 `172.16.0.244/30`, VPN0-SW `172.31.0.254/24`, site vEdge biz-internet `/30`s. Connected routes only |
 | SP Core | `P1`, `P2` | `iosxrv9000` | OSPF Area 0 + LDP + BGP VPNv4 Route Reflectors (`neighbor-group RR-CLIENTS`, AS 65500) |
-| SP Edge | `PE1`–`PE4` | `cat8000v` (`c8000V_Edge_Autonomous`) | OSPF + LDP + MP-BGP VPNv4; VRF `CUST` to branch/DC WAN and `SDWAN-INET`/`SDWAN-MPLS` on `PE4` |
-| DC DMVPN Hub | `DC-R1` | `csr1000v` (`csr1000V_Edge_Autonomous`) | Phase 3 DMVPN Hub (`Tunnel10`, `10.19.0.1/24`, FVRF `INET`, IKEv2/IPsec, EIGRP AS 210 ↔ OSPF 10) |
-| DC WAN & GW | `DC-R2`–`DC-R4` | `iol-xe` | `DC-R2`/`DC-R3` eBGP AS 65200 ↔ `PE3` VRF `CUST`; `DC-R4` OSPF 10 ↔ `DC-CEDGE1/2` VPN 10 |
+| SP Edge | `PE1`–`PE4` | `cat8000v` (`c8000V_Edge_Autonomous`) | OSPF + LDP + MP-BGP VPNv4; VRF `CUST` to branch/DC WAN; `SDWAN-MPLS` (vEdge mpls color, site attachments on `PE1`/`PE2` Gi6–Gi7) and `SDWAN-CTRL` on `PE4` Gi4 `172.31.0.253` so controllers are reachable over MPLS |
+| DC DMVPN Hub | `DC-R1` | `csr1000v` (`csr1000V_Edge_Autonomous`) | Phase 3 DMVPN Hub on the ISP (Gi3 `172.16.0.250/30`, `Tunnel10` `10.19.0.1/24`, FVRF `INET`, IKEv2/IPsec, EIGRP AS 210 ↔ OSPF 10) |
+| DC WAN & GW | `DC-R2`–`DC-R4` | `iol-xe` | `DC-R2`/`DC-R3` MPLS-only, eBGP AS 65200 ↔ `PE3` VRF `CUST`; `DC-R4` internet edge (Et1/1 to the ISP, static default) + OSPF 10 ↔ `DC-CEDGE1/2` VPN 10 |
 | DC Switching | `DC-SW1`–`DC-SW4` | `ioll2-xe` | `DC-SW1`/`DC-SW2` L3 distribution with HSRP (VLANs 10/20/99) + OSPF 10; `DC-SW3`/`DC-SW4` access |
-| SD-WAN | `SDWAN-MGR`, `SDWAN-VAL`, `SDWAN-CTRL`, `DC-CEDGE1`–`2` | Catalyst SD-WAN 20.16.1 / 17.16.01a | Control plane on `172.31.0.0/24` (`VPN 0`) and dual-transport (`biz-internet` + `mpls`) cEdges |
+| SD-WAN | `SDWAN-MGR`, `SDWAN-VAL`, `SDWAN-CTRL` | `cat-sdwan-*-20-12-8-1` | SD-WAN 20.12 control plane on `172.31.0.0/24` (`VPN 0`), org `CCIE-LAB`, vBond `172.31.0.20` |
+| SD-WAN edges | `DC-CEDGE1/2` (site 200), `S1..S3-EDGE` (sites 301–303) | `cat-sdwan-vedge` (`vedge_20.12.8`) | vEdge Cloud day-0: `biz-internet` (ISP) + `mpls restrict` (SP PE) in VPN 0, VPN 512 mgmt, VPN 10 service LAN. A later move to IOS-XE SD-WAN cEdges needs c8000v 17.12.x |
 
 All configs enforce `ipv4_only: true` and replace secrets/PSK/OTP values with `REDACTED-FROM-VAULT`.
 

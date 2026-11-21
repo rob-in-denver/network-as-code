@@ -4,6 +4,9 @@ sp_asn: 65500
 dc_asn: 65200
 cluster_id: 100.64.0.100
 sdwan_org: CCIE-LAB
+sdwan_version: "20.12"
+vedge_image: vedge_20.12.8
+vbond_ip: 172.31.0.20
 placeholder_token: REDACTED-FROM-VAULT
 dmvpn_dc:
   network_id: 110
@@ -96,6 +99,22 @@ sp_pe_routers:
       - name: CUST
         rd: "65500:100"
         rt: "65500:100"
+      - name: SDWAN-MPLS
+        rd: "65500:201"
+        rt: "65500:201"
+        rt_import_extra:
+          - "65500:200"
+    vrf_interfaces:
+      - name: GigabitEthernet6
+        vrf: SDWAN-MPLS
+        description: to S1-EDGE ge0/1 (mpls)
+        address: 172.31.3.1
+        mask: 255.255.255.252
+      - name: GigabitEthernet7
+        vrf: SDWAN-MPLS
+        description: to S3-EDGE ge0/1 (mpls)
+        address: 172.31.3.9
+        mask: 255.255.255.252
   - hostname: PE2
     node_definition: cat8000v
     image_definition: c8000V_Edge_Autonomous
@@ -114,6 +133,17 @@ sp_pe_routers:
       - name: CUST
         rd: "65500:100"
         rt: "65500:100"
+      - name: SDWAN-MPLS
+        rd: "65500:201"
+        rt: "65500:201"
+        rt_import_extra:
+          - "65500:200"
+    vrf_interfaces:
+      - name: GigabitEthernet6
+        vrf: SDWAN-MPLS
+        description: to S2-EDGE ge0/1 (mpls)
+        address: 172.31.3.5
+        mask: 255.255.255.252
   - hostname: PE3
     node_definition: cat8000v
     image_definition: c8000V_Edge_Autonomous
@@ -168,12 +198,16 @@ sp_pe_routers:
       - name: CUST
         rd: "65500:100"
         rt: "65500:100"
-      - name: SDWAN-INET
+      - name: SDWAN-CTRL
         rd: "65500:200"
         rt: "65500:200"
+        rt_import_extra:
+          - "65500:201"
       - name: SDWAN-MPLS
         rd: "65500:201"
         rt: "65500:201"
+        rt_import_extra:
+          - "65500:200"
     vrf_interfaces:
       - name: GigabitEthernet3
         vrf: SDWAN-MPLS
@@ -181,9 +215,9 @@ sp_pe_routers:
         address: 172.31.2.254
         mask: 255.255.255.0
       - name: GigabitEthernet4
-        vrf: SDWAN-INET
-        description: to VPN0-SW port0
-        address: 172.31.0.254
+        vrf: SDWAN-CTRL
+        description: to VPN0-SW port0 (controllers reachable over MPLS)
+        address: 172.31.0.253
         mask: 255.255.255.0
 dc_routers:
   - hostname: DC-R1
@@ -193,10 +227,11 @@ dc_routers:
     ram_mb: 3072
     router_id: 10.200.255.1
     tunnel_address: 10.19.0.1
-    wan_interface: GigabitEthernet4
-    wan_address: 172.31.0.200
-    wan_mask: 255.255.255.0
-    wan_gateway: 172.31.0.254
+    wan_interface: GigabitEthernet3
+    wan_description: to ISP Et3/1 (FVRF INET)
+    wan_address: 172.16.0.250
+    wan_mask: 255.255.255.252
+    wan_gateway: 172.16.0.249
     interfaces:
       - name: GigabitEthernet1
         description: to DC-SW1 Et0/3
@@ -279,15 +314,21 @@ dc_routers:
         mask: 255.255.255.252
         ospf: true
       - name: Ethernet0/3
-        description: to DC-CEDGE1 Gi3 (VPN 10)
+        description: to DC-CEDGE1 ge0/2 (VPN 10)
         address: 10.200.30.1
         mask: 255.255.255.252
         ospf: true
       - name: Ethernet1/0
-        description: to DC-CEDGE2 Gi3 (VPN 10)
+        description: to DC-CEDGE2 ge0/2 (VPN 10)
         address: 10.200.31.1
         mask: 255.255.255.252
         ospf: true
+      - name: Ethernet1/1
+        description: to ISP Et3/2 (DC internet edge, not in OSPF)
+        address: 172.16.0.246
+        mask: 255.255.255.252
+        ospf: false
+    internet_gateway: 172.16.0.245
 dc_switches:
   - hostname: DC-SW1
     role: dist
@@ -351,57 +392,187 @@ dc_switches:
     ram_mb: 1024
     mgmt_ip: 10.200.99.14
     access_vlan: 20
-sdwan_cedges:
+isp:
+  hostname: ISP
+  node_definition: iol-xe
+  ram_mb: 1024
+  role: single internet node (connected routes only, no routing protocol)
+  interfaces:
+    - name: Ethernet3/1
+      description: to DC-R1 Gi3 (DC DMVPN hub)
+      address: 172.16.0.249
+      mask: 255.255.255.252
+    - name: Ethernet3/2
+      description: to DC-R4 Et1/1 (DC internet edge)
+      address: 172.16.0.245
+      mask: 255.255.255.252
+    - name: Ethernet3/3
+      description: to VPN0-SW port6 (SD-WAN biz-internet / controllers)
+      address: 172.31.0.254
+      mask: 255.255.255.0
+    - name: Ethernet2/0
+      description: to S1-EDGE ge0/0 (biz-internet)
+      address: 172.16.11.2
+      mask: 255.255.255.252
+    - name: Ethernet2/1
+      description: to S2-EDGE ge0/0 (biz-internet)
+      address: 172.16.12.2
+      mask: 255.255.255.252
+    - name: Ethernet2/2
+      description: to S3-EDGE ge0/0 (biz-internet)
+      address: 172.16.13.2
+      mask: 255.255.255.252
+sdwan_edges:
   - hostname: DC-CEDGE1
-    node_definition: cat-sdwan-edge
-    image_definition: cat-sdwan-edge-17-16-01a
-    ram_mb: 4096
+    role: dc
+    node_definition: cat-sdwan-vedge
+    image_definition: vedge_20.12.8
+    ram_mb: 2048
     system_ip: 172.31.255.101
     site_id: 200
-    inet_ip: 172.31.0.101
-    mpls_ip: 172.31.2.101
-    svc_ip: 10.200.30.2
-    svc_nh: 10.200.30.1
-    uuid: C8K-00000000-0000-0000-0000-000000000001
+    mgmt_ip: 192.168.255.141/24
+    inet_if: ge0/0
+    inet_desc: biz-internet to VPN0-SW
+    inet_ip: 172.31.0.101/24
+    inet_gw: 172.31.0.254
+    mpls_if: ge0/1
+    mpls_desc: mpls to MPLS-SW
+    mpls_ip: 172.31.2.101/24
+    mpls_routes:
+      - prefix: 172.31.3.0/24
+        nh: 172.31.2.254
+    svc_if: ge0/2
+    svc_desc: VPN 10 to DC-R4
+    svc_ip: 10.200.30.2/30
+    svc_routes:
+      - prefix: 10.200.0.0/16
+        nh: 10.200.30.1
+    uuid: VEDGE-CLOUD-UUID-DC-CEDGE1
   - hostname: DC-CEDGE2
-    node_definition: cat-sdwan-edge
-    image_definition: cat-sdwan-edge-17-16-01a
-    ram_mb: 4096
+    role: dc
+    node_definition: cat-sdwan-vedge
+    image_definition: vedge_20.12.8
+    ram_mb: 2048
     system_ip: 172.31.255.102
     site_id: 200
-    inet_ip: 172.31.0.102
-    mpls_ip: 172.31.2.102
-    svc_ip: 10.200.31.2
-    svc_nh: 10.200.31.1
-    uuid: C8K-00000000-0000-0000-0000-000000000002
+    mgmt_ip: 192.168.255.142/24
+    inet_if: ge0/0
+    inet_desc: biz-internet to VPN0-SW
+    inet_ip: 172.31.0.102/24
+    inet_gw: 172.31.0.254
+    mpls_if: ge0/1
+    mpls_desc: mpls to MPLS-SW
+    mpls_ip: 172.31.2.102/24
+    mpls_routes:
+      - prefix: 172.31.3.0/24
+        nh: 172.31.2.254
+    svc_if: ge0/2
+    svc_desc: VPN 10 to DC-R4
+    svc_ip: 10.200.31.2/30
+    svc_routes:
+      - prefix: 10.200.0.0/16
+        nh: 10.200.31.1
+    uuid: VEDGE-CLOUD-UUID-DC-CEDGE2
+  - hostname: S1-EDGE
+    role: site
+    node_definition: cat-sdwan-vedge
+    image_definition: vedge_20.12.8
+    ram_mb: 2048
+    system_ip: 172.31.255.111
+    site_id: 301
+    mgmt_ip: 192.168.255.161/24
+    inet_if: ge0/0
+    inet_desc: biz-internet to ISP Ethernet2/0
+    inet_ip: 172.16.11.1/30
+    inet_gw: 172.16.11.2
+    mpls_if: ge0/1
+    mpls_desc: mpls to PE1 GigabitEthernet6
+    mpls_ip: 172.31.3.2/30
+    mpls_routes:
+      - prefix: 172.31.0.0/16
+        nh: 172.31.3.1
+    svc_if: ge0/2
+    svc_desc: VPN 10 S1 LAN (S1-SW)
+    svc_ip: 10.3.1.2/24
+    svc_routes: []
+    uuid: VEDGE-CLOUD-UUID-S1-EDGE
+  - hostname: S2-EDGE
+    role: site
+    node_definition: cat-sdwan-vedge
+    image_definition: vedge_20.12.8
+    ram_mb: 2048
+    system_ip: 172.31.255.112
+    site_id: 302
+    mgmt_ip: 192.168.255.162/24
+    inet_if: ge0/0
+    inet_desc: biz-internet to ISP Ethernet2/1
+    inet_ip: 172.16.12.1/30
+    inet_gw: 172.16.12.2
+    mpls_if: ge0/1
+    mpls_desc: mpls to PE2 GigabitEthernet6
+    mpls_ip: 172.31.3.6/30
+    mpls_routes:
+      - prefix: 172.31.0.0/16
+        nh: 172.31.3.5
+    svc_if: ge0/2
+    svc_desc: VPN 10 S2 LAN (S2-SW)
+    svc_ip: 10.3.2.2/24
+    svc_routes: []
+    uuid: VEDGE-CLOUD-UUID-S2-EDGE
+  - hostname: S3-EDGE
+    role: site
+    node_definition: cat-sdwan-vedge
+    image_definition: vedge_20.12.8
+    ram_mb: 2048
+    system_ip: 172.31.255.113
+    site_id: 303
+    mgmt_ip: 192.168.255.163/24
+    inet_if: ge0/0
+    inet_desc: biz-internet to ISP Ethernet2/2
+    inet_ip: 172.16.13.1/30
+    inet_gw: 172.16.13.2
+    mpls_if: ge0/1
+    mpls_desc: mpls to PE1 GigabitEthernet7
+    mpls_ip: 172.31.3.10/30
+    mpls_routes:
+      - prefix: 172.31.0.0/16
+        nh: 172.31.3.9
+    svc_if: ge0/2
+    svc_desc: VPN 10 S3 LAN (S3-SW)
+    svc_ip: 10.3.3.2/24
+    svc_routes: []
+    uuid: VEDGE-CLOUD-UUID-S3-EDGE
 sdwan_controllers:
   - hostname: SDWAN-MGR
     personality: vmanage
     device_model: vmanage
     node_definition: cat-sdwan-manager
-    image_definition: cat-sdwan-manager-20-16-1
+    image_definition: cat-sdwan-manager-20-12-8-1
     ram_mb: 16384
     system_ip: 172.31.255.10
     vpn0_if: eth1
     vpn0_ip: 172.31.0.10/24
+    mgmt_ip: 192.168.255.151/24
     site_id: 100
   - hostname: SDWAN-VAL
     personality: vedge
     device_model: vedge-cloud
     node_definition: cat-sdwan-validator
-    image_definition: cat-sdwan-validator-20-16-1
+    image_definition: cat-sdwan-validator-20-12-8-1
     ram_mb: 2048
     system_ip: 172.31.255.20
     vpn0_if: ge0/0
     vpn0_ip: 172.31.0.20/24
+    mgmt_ip: 192.168.255.152/24
     site_id: 100
   - hostname: SDWAN-CTRL
     personality: vsmart
     device_model: vsmart
     node_definition: cat-sdwan-controller
-    image_definition: cat-sdwan-controller-20-16-1
+    image_definition: cat-sdwan-controller-20-12-8-1
     ram_mb: 4096
     system_ip: 172.31.255.30
     vpn0_if: eth1
     vpn0_ip: 172.31.0.30/24
+    mgmt_ip: 192.168.255.153/24
     site_id: 100

@@ -45,7 +45,7 @@ def test_rendered_tree_covers_every_device():
     ios = {path.stem for path in (ROOT / "rendered" / "iosxe").glob("*.cfg")}
     iosxr = {path.stem for path in (ROOT / "rendered" / "iosxr").glob("*.cfg")}
     enterprise = {path.stem for path in (ROOT / "rendered" / "enterprise").glob("*.cfg")}
-    sdwan_cedges = {path.stem for path in (ROOT / "rendered" / "sdwan").glob("*.cfg")}
+    sdwan_edges = {path.stem for path in (ROOT / "rendered" / "sdwan").glob("*.cfg")}
     sdwan_ctrls = {path.stem for path in (ROOT / "rendered" / "sdwan").glob("*.yaml")}
 
     assert nxos == {device["hostname"] for device in fabric["devices"]}
@@ -54,8 +54,8 @@ def test_rendered_tree_covers_every_device():
     assert enterprise == {
         device["hostname"]
         for device in ENTERPRISE["sp_pe_routers"] + ENTERPRISE["dc_routers"] + ENTERPRISE["dc_switches"]
-    }
-    assert sdwan_cedges == {device["hostname"] for device in ENTERPRISE["sdwan_cedges"]}
+    } | {ENTERPRISE["isp"]["hostname"]}
+    assert sdwan_edges == {device["hostname"] for device in ENTERPRISE["sdwan_edges"]}
     assert sdwan_ctrls == {device["hostname"] for device in ENTERPRISE["sdwan_controllers"]}
     assert not list(Path(ROOT / "rendered").rglob("*password*"))
 
@@ -66,3 +66,32 @@ def test_enterprise_core_is_ipv4_only_and_dc_hub_terminates_dmvpn():
     dc_r1 = (ROOT / "rendered" / "enterprise" / "DC-R1.cfg").read_text()
     assert "ip nhrp redirect" in dc_r1
     assert "tunnel vrf INET" in dc_r1
+
+
+def test_two_dc_routers_face_the_single_isp_and_edges_are_vedge_20_12():
+    isp = (ROOT / "rendered" / "enterprise" / "ISP.cfg").read_text()
+    assert "router " not in isp
+    assert "172.16.0.249 255.255.255.252" in isp and "172.16.0.245 255.255.255.252" in isp
+    dc_r1 = (ROOT / "rendered" / "enterprise" / "DC-R1.cfg").read_text()
+    dc_r4 = (ROOT / "rendered" / "enterprise" / "DC-R4.cfg").read_text()
+    assert "ip route vrf INET 0.0.0.0 0.0.0.0 172.16.0.249" in dc_r1
+    assert "ip route 0.0.0.0 0.0.0.0 172.16.0.245 name ISP-INTERNET" in dc_r4
+    for name in ("DC-R2", "DC-R3"):
+        cfg = (ROOT / "rendered" / "enterprise" / f"{name}.cfg").read_text()
+        assert "172.16.0." not in cfg
+    for edge in ENTERPRISE["sdwan_edges"]:
+        assert edge["node_definition"] == "cat-sdwan-vedge"
+        assert edge["image_definition"] == "vedge_20.12.8"
+    for ctrl in ENTERPRISE["sdwan_controllers"]:
+        assert ctrl["image_definition"].endswith("-20-12-8-1")
+
+
+def test_vedge_check_flags_a_missing_vpn512():
+    edge = ENTERPRISE["sdwan_edges"][0]
+    path = ROOT / "rendered" / "sdwan" / f"{edge['hostname']}.cfg"
+    original = path.read_text()
+    try:
+        path.write_text(original.replace("<vpn-id>512</vpn-id>", "<vpn-id>9999</vpn-id>"))
+        assert any("vpn-id>512" in item for item in check_enterprise(ROOT, ENTERPRISE))
+    finally:
+        path.write_text(original)

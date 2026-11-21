@@ -33,6 +33,12 @@ write_files:
                   <address>172.31.0.254</address>
                 </next-hop>
               </route>
+              <route>
+                <prefix>172.31.2.0/23</prefix>
+                <next-hop>
+                  <address>172.31.0.253</address>
+                </next-hop>
+              </route>
             </ip>
             <interface>
               <if-name>ge0/0</if-name>

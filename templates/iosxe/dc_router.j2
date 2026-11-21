@@ -27,7 +27,7 @@ interface {{ intf.name }}
 {% endfor %}
 {% if device.role == "dc_dmvpn_hub" %}
 interface {{ device.wan_interface }}
- description to VPN0-SW port6 (FVRF INET)
+ description {{ device.wan_description }}
  vrf forwarding INET
  ip address {{ device.wan_address }} {{ device.wan_mask }}
  no shutdown
@@ -122,6 +122,10 @@ router bgp {{ enterprise.dc_asn }}
  exit-address-family
 !
 {% else %}
+{% if device.internet_gateway is defined %}
+ip route 0.0.0.0 0.0.0.0 {{ device.internet_gateway }} name ISP-INTERNET
+!
+{% endif %}
 router ospf 10
  router-id {{ device.router_id }}
  passive-interface Loopback0

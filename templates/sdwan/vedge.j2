@@ -1,0 +1,126 @@
+#cloud-config
+# {{ device.hostname }}: Viptela vEdge Cloud {{ enterprise.sdwan_version }} (CML node definition {{ device.node_definition }}, image {{ device.image_definition }}).
+# uuid/otp are placeholders: take the chassis number and token from SD-WAN Manager
+# (Configuration > Devices > WAN Edge List) or run
+# `request vedge-cloud activate chassis-number <uuid> token <otp>` after boot.
+vinitparam:
+  - uuid : {{ device.uuid }}
+  - otp : {{ enterprise.placeholder_token }}
+  - vbond : {{ enterprise.vbond_ip }}
+  - org : {{ enterprise.sdwan_org }}
+write_files:
+  - path: /etc/default/inited
+    content: "1\n"
+  - path: /etc/confd/init/zcloud.xml
+    content: |
+      <config xmlns="http://tail-f.com/ns/config/1.0">
+        <system xmlns="http://viptela.com/system">
+          <personality>vedge</personality>
+          <device-model>vedge-cloud</device-model>
+          <host-name>{{ device.hostname }}</host-name>
+          <system-ip>{{ device.system_ip }}</system-ip>
+          <site-id>{{ device.site_id }}</site-id>
+          <organization-name>{{ enterprise.sdwan_org }}</organization-name>
+          <sp-organization-name>{{ enterprise.sdwan_org }}</sp-organization-name>
+          <vbond>
+            <remote>{{ enterprise.vbond_ip }}</remote>
+            <port>12346</port>
+          </vbond>
+          <domain-id>1</domain-id>
+          <!-- admin credentials injected from Ansible Vault at deploy time -->
+        </system>
+        <vpn xmlns="http://viptela.com/vpn">
+          <vpn-instance>
+            <vpn-id>0</vpn-id>
+            <ip>
+              <route>
+                <prefix>0.0.0.0/0</prefix>
+                <next-hop>
+                  <address>{{ device.inet_gw }}</address>
+                </next-hop>
+              </route>
+{% for r in device.mpls_routes %}
+              <route>
+                <prefix>{{ r.prefix }}</prefix>
+                <next-hop>
+                  <address>{{ r.nh }}</address>
+                </next-hop>
+              </route>
+{% endfor %}
+            </ip>
+            <interface>
+              <if-name>{{ device.inet_if }}</if-name>
+              <description>{{ device.inet_desc }}</description>
+              <ip>
+                <address>{{ device.inet_ip }}</address>
+              </ip>
+              <tunnel-interface>
+                <encapsulation>
+                  <encap>ipsec</encap>
+                </encapsulation>
+                <color>
+                  <value>biz-internet</value>
+                </color>
+                <allow-service>
+                  <all>true</all>
+                </allow-service>
+              </tunnel-interface>
+              <shutdown>false</shutdown>
+            </interface>
+            <interface>
+              <if-name>{{ device.mpls_if }}</if-name>
+              <description>{{ device.mpls_desc }}</description>
+              <ip>
+                <address>{{ device.mpls_ip }}</address>
+              </ip>
+              <tunnel-interface>
+                <encapsulation>
+                  <encap>ipsec</encap>
+                </encapsulation>
+                <color>
+                  <value>mpls</value>
+                  <restrict/>
+                </color>
+                <allow-service>
+                  <all>true</all>
+                </allow-service>
+              </tunnel-interface>
+              <shutdown>false</shutdown>
+            </interface>
+          </vpn-instance>
+          <vpn-instance>
+            <vpn-id>512</vpn-id>
+            <interface>
+              <if-name>eth0</if-name>
+              <ip>
+                <address>{{ device.mgmt_ip }}</address>
+              </ip>
+              <shutdown>false</shutdown>
+            </interface>
+          </vpn-instance>
+          <vpn-instance>
+            <vpn-id>10</vpn-id>
+            <name>SERVICE</name>
+{% if device.svc_routes %}
+            <ip>
+{% for r in device.svc_routes %}
+              <route>
+                <prefix>{{ r.prefix }}</prefix>
+                <next-hop>
+                  <address>{{ r.nh }}</address>
+                </next-hop>
+              </route>
+{% endfor %}
+            </ip>
+{% endif %}
+            <interface>
+              <if-name>{{ device.svc_if }}</if-name>
+              <description>{{ device.svc_desc }}</description>
+              <ip>
+                <address>{{ device.svc_ip }}</address>
+              </ip>
+              <shutdown>false</shutdown>
+            </interface>
+          </vpn-instance>
+        </vpn>
+      </config>

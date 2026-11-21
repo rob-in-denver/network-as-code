@@ -1,0 +1,14 @@
+hostname {{ device.hostname }}
+no ip domain lookup
+ip domain name ccie.lab
+!
+! {{ device.role }}
+! Every internet-facing interface in the enterprise is one hop from this node.
+{% for intf in device.interfaces %}
+interface {{ intf.name }}
+ description {{ intf.description }}
+ ip address {{ intf.address }} {{ intf.mask }}
+ no shutdown
+!
+{% endfor %}
+end

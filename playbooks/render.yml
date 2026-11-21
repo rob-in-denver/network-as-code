@@ -85,12 +85,20 @@
       vars:
         device: "{{ item }}"
 
-    - name: Render SD-WAN Catalyst cEdge cloud-init configs
+    - name: Render the single ISP node
       ansible.builtin.template:
-        src: "{{ playbook_dir }}/../templates/sdwan/cedge.j2"
+        src: "{{ playbook_dir }}/../templates/iosxe/isp.j2"
+        dest: "{{ playbook_dir }}/../rendered/enterprise/{{ enterprise.isp.hostname }}.cfg"
+        mode: "0644"
+      vars:
+        device: "{{ enterprise.isp }}"
+
+    - name: Render SD-WAN vEdge 20.12 cloud-init configs (DC and site edges)
+      ansible.builtin.template:
+        src: "{{ playbook_dir }}/../templates/sdwan/vedge.j2"
         dest: "{{ playbook_dir }}/../rendered/sdwan/{{ item.hostname }}.cfg"
         mode: "0644"
-      loop: "{{ enterprise.sdwan_cedges }}"
+      loop: "{{ enterprise.sdwan_edges }}"
       vars:
         device: "{{ item }}"
 

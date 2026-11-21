@@ -8,6 +8,9 @@ vrf definition {{ vrf.name }}
  address-family ipv4
   route-target export {{ vrf.rt }}
   route-target import {{ vrf.rt }}
+{% for rt in vrf.rt_import_extra | default([]) %}
+  route-target import {{ rt }}
+{% endfor %}
  exit-address-family
 !
 {% endfor %}
@@ -57,6 +60,12 @@ router bgp {{ enterprise.sp_asn }}
   neighbor 100.64.0.2 activate
   neighbor 100.64.0.2 send-community extended
  exit-address-family
+{% for vrf in device.vrfs if vrf.name.startswith('SDWAN') %}
+ !
+ address-family ipv4 vrf {{ vrf.name }}
+  redistribute connected
+ exit-address-family
+{% endfor %}
 {% for nbr in device.ebgp_vrf_neighbors | default([]) %}
  !
  address-family ipv4 vrf {{ nbr.vrf }}

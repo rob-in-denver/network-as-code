@@ -302,18 +302,42 @@ def check_enterprise(root: Path, enterprise: dict) -> list[str]:
         require_line(cfg, "vlan 10", findings, name)
         require_line(cfg, "vlan 20", findings, name)
 
-    for cedge in enterprise["sdwan_cedges"]:
-        name = cedge["hostname"]
+    isp = enterprise["isp"]
+    path = root / "rendered" / "enterprise" / f"{isp['hostname']}.cfg"
+    if not path.exists():
+        findings.append(f"{isp['hostname']}: rendered ISP config missing")
+    else:
+        cfg = path.read_text()
+        findings.extend(check_secrets(cfg, isp["hostname"], placeholder))
+        if IPV6_TOKEN.search(cfg):
+            findings.append(f"{isp['hostname']}: IPv6 config is forbidden in IPv4-only core")
+        if re.search(r"^router ", cfg, re.M):
+            findings.append(f"{isp['hostname']}: the ISP must only carry connected routes")
+        for intf in isp["interfaces"]:
+            require_line(cfg, f"ip address {intf['address']} {intf['mask']}", findings, isp["hostname"])
+
+    internet_facing = [r["hostname"] for r in enterprise["dc_routers"]
+                       if r.get("wan_gateway") or r.get("internet_gateway")]
+    if sorted(internet_facing) != ["DC-R1", "DC-R4"]:
+        findings.append(f"enterprise_core: exactly DC-R1 and DC-R4 must face the ISP, found {internet_facing}")
+
+    for edge in enterprise["sdwan_edges"]:
+        name = edge["hostname"]
         path = root / "rendered" / "sdwan" / f"{name}.cfg"
         if not path.exists():
-            findings.append(f"{name}: rendered SD-WAN cEdge config missing")
+            findings.append(f"{name}: rendered SD-WAN vEdge config missing")
             continue
         cfg = path.read_text()
         findings.extend(check_secrets(cfg, name, placeholder))
         if IPV6_TOKEN.search(cfg):
             findings.append(f"{name}: IPv6 config is forbidden in IPv4-only core")
-        require_line(cfg, f"host-name {name}", findings, name)
-        require_line(cfg, f"system-ip {cedge['system_ip']}", findings, name)
+        if edge["node_definition"] != "cat-sdwan-vedge" or edge["image_definition"] != enterprise["vedge_image"]:
+            findings.append(f"{name}: edges must use cat-sdwan-vedge / {enterprise['vedge_image']}")
+        for needle in ("#cloud-config", "vinitparam:", "/etc/confd/init/zcloud.xml",
+                       "<personality>vedge</personality>", f"<host-name>{name}</host-name>",
+                       f"<system-ip>{edge['system_ip']}</system-ip>", "<vpn-id>512</vpn-id>"):
+            if needle not in cfg:
+                findings.append(f"{name}: missing {needle}")
         require_line(cfg, f"- otp : {placeholder}", findings, name)
 
     for ctrl in enterprise["sdwan_controllers"]:
@@ -330,6 +354,8 @@ def check_enterprise(root: Path, enterprise: dict) -> list[str]:
             findings.append(f"{name}: missing controller host-name")
         if f"<system-ip>{ctrl['system_ip']}</system-ip>" not in cfg:
             findings.append(f"{name}: missing controller system-ip")
+        if "-20-12-" not in ctrl["image_definition"]:
+            findings.append(f"{name}: controllers must run SD-WAN 20.12 to match the vEdges")
 
     return findings
 
@@ -380,7 +406,8 @@ def main() -> int:
         + len(enterprise["sp_pe_routers"])
         + len(enterprise["dc_routers"])
         + len(enterprise["dc_switches"])
-        + len(enterprise["sdwan_cedges"])
+        + 1
+        + len(enterprise["sdwan_edges"])
         + len(enterprise["sdwan_controllers"])
     )
     print(f"ok: {count} devices match the source of truth")
