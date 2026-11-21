@@ -226,6 +226,114 @@ def link_findings(fabric: dict) -> list[str]:
     return findings
 
 
+
+IPV6_TOKEN = re.compile(r"(?i)\bipv6\b|::")
+
+
+def check_enterprise(root: Path, enterprise: dict) -> list[str]:
+    findings: list[str] = []
+    if not enterprise.get("ipv4_only"):
+        findings.append("enterprise_core: ipv4_only must be true")
+    placeholder = enterprise["placeholder_token"]
+
+    for p in enterprise["sp_p_routers"]:
+        name = p["hostname"]
+        path = root / "rendered" / "iosxr" / f"{name}.cfg"
+        if not path.exists():
+            findings.append(f"{name}: rendered IOS XR config missing")
+            continue
+        cfg = path.read_text()
+        findings.extend(check_secrets(cfg, name, placeholder))
+        if IPV6_TOKEN.search(cfg):
+            findings.append(f"{name}: IPv6 config is forbidden in IPv4-only core")
+        require_line(cfg, f"hostname {name}", findings, name)
+        require_line(cfg, "neighbor-group RR-CLIENTS", findings, name)
+        require_line(cfg, "address-family vpnv4 unicast", findings, name)
+        for client in p["clients"]:
+            require_line(cfg, f"neighbor {client}", findings, name)
+
+    for pe in enterprise["sp_pe_routers"]:
+        name = pe["hostname"]
+        path = root / "rendered" / "enterprise" / f"{name}.cfg"
+        if not path.exists():
+            findings.append(f"{name}: rendered PE config missing")
+            continue
+        cfg = path.read_text()
+        findings.extend(check_secrets(cfg, name, placeholder))
+        if IPV6_TOKEN.search(cfg):
+            findings.append(f"{name}: IPv6 config is forbidden in IPv4-only core")
+        require_line(cfg, f"hostname {name}", findings, name)
+        require_line(cfg, "mpls ldp router-id Loopback0 force", findings, name)
+        require_line(cfg, "neighbor 100.64.0.1 remote-as 65500", findings, name)
+        require_line(cfg, "neighbor 100.64.0.2 remote-as 65500", findings, name)
+        for vrf in pe["vrfs"]:
+            require_line(cfg, f"vrf definition {vrf['name']}", findings, name)
+
+    for rtr in enterprise["dc_routers"]:
+        name = rtr["hostname"]
+        path = root / "rendered" / "enterprise" / f"{name}.cfg"
+        if not path.exists():
+            findings.append(f"{name}: rendered DC router config missing")
+            continue
+        cfg = path.read_text()
+        findings.extend(check_secrets(cfg, name, placeholder))
+        if IPV6_TOKEN.search(cfg):
+            findings.append(f"{name}: IPv6 config is forbidden in IPv4-only core")
+        require_line(cfg, f"hostname {name}", findings, name)
+        require_line(cfg, "router ospf 10", findings, name)
+        if rtr["role"] == "dc_dmvpn_hub":
+            require_line(cfg, "interface Tunnel10", findings, name)
+            require_line(cfg, "ip nhrp redirect", findings, name)
+            require_line(cfg, "tunnel vrf INET", findings, name)
+            require_line(cfg, "no split-horizon", findings, name)
+            require_line(cfg, "no next-hop-self", findings, name)
+
+    for sw in enterprise["dc_switches"]:
+        name = sw["hostname"]
+        path = root / "rendered" / "enterprise" / f"{name}.cfg"
+        if not path.exists():
+            findings.append(f"{name}: rendered DC switch config missing")
+            continue
+        cfg = path.read_text()
+        findings.extend(check_secrets(cfg, name, placeholder))
+        if IPV6_TOKEN.search(cfg):
+            findings.append(f"{name}: IPv6 config is forbidden in IPv4-only core")
+        require_line(cfg, f"hostname {name}", findings, name)
+        require_line(cfg, "vlan 10", findings, name)
+        require_line(cfg, "vlan 20", findings, name)
+
+    for cedge in enterprise["sdwan_cedges"]:
+        name = cedge["hostname"]
+        path = root / "rendered" / "sdwan" / f"{name}.cfg"
+        if not path.exists():
+            findings.append(f"{name}: rendered SD-WAN cEdge config missing")
+            continue
+        cfg = path.read_text()
+        findings.extend(check_secrets(cfg, name, placeholder))
+        if IPV6_TOKEN.search(cfg):
+            findings.append(f"{name}: IPv6 config is forbidden in IPv4-only core")
+        require_line(cfg, f"host-name {name}", findings, name)
+        require_line(cfg, f"system-ip {cedge['system_ip']}", findings, name)
+        require_line(cfg, f"- otp : {placeholder}", findings, name)
+
+    for ctrl in enterprise["sdwan_controllers"]:
+        name = ctrl["hostname"]
+        path = root / "rendered" / "sdwan" / f"{name}.yaml"
+        if not path.exists():
+            findings.append(f"{name}: rendered SD-WAN controller config missing")
+            continue
+        cfg = path.read_text()
+        findings.extend(check_secrets(cfg, name, placeholder))
+        if IPV6_TOKEN.search(cfg):
+            findings.append(f"{name}: IPv6 config is forbidden in IPv4-only core")
+        if f"<host-name>{name}</host-name>" not in cfg:
+            findings.append(f"{name}: missing controller host-name")
+        if f"<system-ip>{ctrl['system_ip']}</system-ip>" not in cfg:
+            findings.append(f"{name}: missing controller system-ip")
+
+    return findings
+
+
 def validate_all(root: Path = ROOT) -> list[str]:
     fabric = load_yaml(root / "data" / "fabric.yml")
     dmvpn = load_yaml(root / "data" / "dmvpn.yml")
@@ -249,6 +357,9 @@ def validate_all(root: Path = ROOT) -> list[str]:
             findings.append(f"{device['hostname']}: rendered IOS-XE config missing")
             continue
         findings.extend(check_dmvpn(device, dmvpn, path.read_text()))
+
+    enterprise = load_yaml(root / "data" / "enterprise_core.yml")
+    findings.extend(check_enterprise(root, enterprise))
     return findings
 
 
@@ -260,7 +371,18 @@ def main() -> int:
         return 1
     fabric = load_yaml(ROOT / "data" / "fabric.yml")
     dmvpn = load_yaml(ROOT / "data" / "dmvpn.yml")
-    count = len(fabric["devices"]) + len(dmvpn["hubs"]) + len(dmvpn["spokes"])
+    enterprise = load_yaml(ROOT / "data" / "enterprise_core.yml")
+    count = (
+        len(fabric["devices"])
+        + len(dmvpn["hubs"])
+        + len(dmvpn["spokes"])
+        + len(enterprise["sp_p_routers"])
+        + len(enterprise["sp_pe_routers"])
+        + len(enterprise["dc_routers"])
+        + len(enterprise["dc_switches"])
+        + len(enterprise["sdwan_cedges"])
+        + len(enterprise["sdwan_controllers"])
+    )
     print(f"ok: {count} devices match the source of truth")
     return 0
 

@@ -1,0 +1,77 @@
+Content-Type: multipart/mixed; boundary="===============7330845974216740156=="
+MIME-Version: 1.0
+
+--===============7330845974216740156==
+Content-Type: text/cloud-config; charset="us-ascii"
+MIME-Version: 1.0
+Content-Transfer-Encoding: 7bit
+Content-Disposition: attachment; filename="cloud-init-bootstrap"
+
+#cloud-config
+vinitparam:
+ - uuid : {{ device.uuid }}
+ - otp : {{ enterprise.placeholder_token }}
+ - vbond : 172.31.0.20
+ - org : {{ enterprise.sdwan_org }}
+ - rcc : true
+
+--===============7330845974216740156==
+Content-Type: text/cloud-boothook; charset="us-ascii"
+MIME-Version: 1.0
+Content-Transfer-Encoding: 7bit
+Content-Disposition: attachment; filename="config-{{ device.uuid }}.txt"
+
+#cloud-boothook
+system
+ host-name {{ device.hostname }}
+ system-ip {{ device.system_ip }}
+ site-id {{ device.site_id }}
+ admin-tech-on-failure
+ organization-name "{{ enterprise.sdwan_org }}"
+ vbond 172.31.0.20
+!
+vrf definition 10
+ description DC-SERVICE-VPN
+ rd 1:10
+ address-family ipv4
+  route-target export 1:10
+  route-target import 1:10
+ exit-address-family
+!
+interface GigabitEthernet1
+ description VPN 0 INET transport
+ no shutdown
+ ip address {{ device.inet_ip }} 255.255.255.0
+!
+interface GigabitEthernet2
+ description VPN 0 MPLS transport
+ no shutdown
+ ip address {{ device.mpls_ip }} 255.255.255.0
+!
+interface GigabitEthernet3
+ description VPN 10 DC service side
+ vrf forwarding 10
+ ip address {{ device.svc_ip }} 255.255.255.252
+ no shutdown
+!
+sdwan
+ interface GigabitEthernet1
+  tunnel-interface
+   encapsulation ipsec
+   color biz-internet
+   allow-service all
+  exit
+ exit
+ interface GigabitEthernet2
+  tunnel-interface
+   encapsulation ipsec
+   color mpls
+   allow-service all
+  exit
+ exit
+!
+ip route 0.0.0.0 0.0.0.0 172.31.0.254
+ip route 172.31.0.0 255.255.0.0 172.31.2.254
+ip route vrf 10 10.200.0.0 255.255.0.0 {{ device.svc_nh }}
+!
+--===============7330845974216740156==--

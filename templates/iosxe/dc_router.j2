@@ -1,0 +1,131 @@
+hostname {{ device.hostname }}
+no ip domain lookup
+ip domain name ccie.lab
+!
+{% if device.role == "dc_dmvpn_hub" %}
+vrf definition INET
+ address-family ipv4
+ exit-address-family
+!
+{% endif %}
+interface Loopback0
+ description {{ device.hostname }} RID
+ ip address {{ device.router_id }} 255.255.255.255
+ ip ospf 10 area 0
+ no shutdown
+!
+{% for intf in device.interfaces %}
+interface {{ intf.name }}
+ description {{ intf.description }}
+ ip address {{ intf.address }} {{ intf.mask }}
+{% if device.role == "dc_dmvpn_hub" or intf.ospf %}
+ ip ospf network point-to-point
+ ip ospf 10 area 0
+{% endif %}
+ no shutdown
+!
+{% endfor %}
+{% if device.role == "dc_dmvpn_hub" %}
+interface {{ device.wan_interface }}
+ description to VPN0-SW port6 (FVRF INET)
+ vrf forwarding INET
+ ip address {{ device.wan_address }} {{ device.wan_mask }}
+ no shutdown
+!
+crypto ikev2 proposal IKEV2-DC-PROP
+ encryption aes-cbc-256
+ integrity sha256
+ group 14
+!
+crypto ikev2 policy IKEV2-DC-POL
+ match fvrf INET
+ proposal IKEV2-DC-PROP
+!
+crypto ikev2 keyring KR-DC
+ peer ANY
+  address 0.0.0.0 0.0.0.0
+  pre-shared-key {{ enterprise.placeholder_token }}
+ !
+!
+crypto ikev2 profile IKE-DC
+ match fvrf INET
+ match identity remote address 0.0.0.0
+ authentication remote pre-share
+ authentication local pre-share
+ keyring local KR-DC
+!
+crypto ipsec transform-set TS-DC esp-aes 256 esp-sha256-hmac
+ mode transport
+!
+crypto ipsec profile IPSEC-DC
+ set transform-set TS-DC
+ set ikev2-profile IKE-DC
+!
+interface Tunnel10
+ description DC DMVPN Phase 3 Hub (branch spokes terminate here)
+ ip address {{ device.tunnel_address }} {{ enterprise.dmvpn_dc.tunnel_mask }}
+ no ip redirects
+ ip mtu 1400
+ ip tcp adjust-mss 1360
+ ip nhrp map multicast dynamic
+ ip nhrp network-id {{ enterprise.dmvpn_dc.network_id }}
+ ip nhrp authentication {{ enterprise.placeholder_token }}
+ ip nhrp redirect
+ tunnel source {{ device.wan_interface }}
+ tunnel mode gre multipoint
+ tunnel key {{ enterprise.dmvpn_dc.tunnel_key }}
+ tunnel vrf INET
+ tunnel protection ipsec profile IPSEC-DC
+ no shutdown
+!
+ip route vrf INET 0.0.0.0 0.0.0.0 {{ device.wan_gateway }}
+!
+router ospf 10
+ router-id {{ device.router_id }}
+ passive-interface Loopback0
+ auto-cost reference-bandwidth 10000
+ redistribute eigrp {{ enterprise.dmvpn_dc.eigrp_asn }} subnets
+!
+router eigrp {{ enterprise.dmvpn_dc.eigrp_name }}
+ address-family ipv4 unicast autonomous-system {{ enterprise.dmvpn_dc.eigrp_asn }}
+  router-id {{ device.router_id }}
+  network 10.19.0.0 0.0.0.255
+  af-interface Tunnel10
+   no split-horizon
+   no next-hop-self
+  exit-af-interface
+  topology base
+   redistribute ospf 10 metric 1000000 1 255 1 1500
+  exit-af-topology
+ exit-address-family
+!
+{% elif device.role == "dc_wan" %}
+router ospf 10
+ router-id {{ device.router_id }}
+ passive-interface Loopback0
+ auto-cost reference-bandwidth 10000
+ redistribute bgp {{ enterprise.dc_asn }} subnets
+!
+router bgp {{ enterprise.dc_asn }}
+ bgp router-id {{ device.router_id }}
+ bgp log-neighbor-changes
+ no bgp default ipv4-unicast
+ neighbor {{ device.pe_peer }} remote-as {{ enterprise.sp_asn }}
+ neighbor {{ device.ibgp_peer }} remote-as {{ enterprise.dc_asn }}
+ neighbor {{ device.ibgp_peer }} update-source Loopback0
+ !
+ address-family ipv4
+  neighbor {{ device.pe_peer }} activate
+  neighbor {{ device.ibgp_peer }} activate
+  neighbor {{ device.ibgp_peer }} next-hop-self
+  redistribute ospf 10 match internal external 1 external 2
+ exit-address-family
+!
+{% else %}
+router ospf 10
+ router-id {{ device.router_id }}
+ passive-interface Loopback0
+ auto-cost reference-bandwidth 10000
+!
+{% endif %}
+end

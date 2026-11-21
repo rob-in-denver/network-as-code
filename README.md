@@ -2,10 +2,11 @@
 
 [![CI](https://github.com/rob-in-denver/network-as-code/actions/workflows/network-as-code.yml/badge.svg)](https://github.com/rob-in-denver/network-as-code/actions/workflows/network-as-code.yml)
 
-A small, real example of generating Cisco configuration from a YAML source of truth. It covers two designs:
+A small, real example of generating Cisco configuration from a YAML source of truth. It covers three designs:
 
 - a two-site VXLAN BGP EVPN fabric on NX-OS
 - a DMVPN Phase 3 hub and spoke on IOS-XE, with IKEv2, a front-door VRF, named EIGRP, and per-spoke route filtering
+- an IPv4-only Enterprise Core spanning a 6-node MPLS SP Core (`2 × XRv9000` P/RR + `4 × Cat8000v` PE), a Data Center (`DC-R1` CSR1000v DMVPN Hub + `DC-R2..DC-R4` `IOL-XE` + `DC-SW1..DC-SW4` `IOL-L2`), and a Cisco Catalyst SD-WAN stack (`SDWAN-MGR`, `SDWAN-VAL`, `SDWAN-CTRL`, `DC-CEDGE1`, `DC-CEDGE2`)
 
 Ansible and Jinja render the device configs. Pytest checks them. GitHub Actions runs the same steps and does not log into any device.
 
@@ -30,17 +31,27 @@ python -m nac.validate
 ## Layout
 
 ```
-data/fabric.yml          VXLAN fabric source of truth
-data/dmvpn.yml           DMVPN source of truth
-templates/nxos/device.j2 NX-OS Jinja template
-templates/iosxe/dmvpn.j2 IOS-XE Jinja template
-playbooks/render.yml     Ansible playbook that renders both
-rendered/nxos/           Generated NX-OS, committed
-rendered/iosxe/          Generated IOS-XE, committed
-inventory/hosts.yml      Documentation inventory (TEST-NET addresses)
-nac/validate.py          Offline checks against the source of truth
-nac/collect.py           Optional Netmiko collector, not used by CI
-tests/test_nac.py        Unit tests
+data/fabric.yml              VXLAN fabric source of truth
+data/dmvpn.yml               DMVPN source of truth
+data/enterprise_core.yml     6-node SP core + DC (4R/4SW/2cEdge) + SD-WAN source of truth
+templates/nxos/device.j2     NX-OS Jinja template
+templates/iosxe/dmvpn.j2     IOS-XE DMVPN Jinja template
+templates/iosxr/sp_p.j2      IOS XR SP P/RR Jinja template
+templates/iosxe/sp_pe.j2     Cat8000v SP PE Jinja template
+templates/iosxe/dc_router.j2 Data Center router + DC-R1 DMVPN hub Jinja template
+templates/iosxe/dc_switch.j2 Data Center distribution/access switch Jinja template
+templates/sdwan/cedge.j2     Cat8000v SD-WAN cEdge cloud-init Jinja template
+templates/sdwan/controller.j2 SD-WAN Manager/Validator/Controller cloud-init template
+playbooks/render.yml         Ansible playbook that renders all designs
+rendered/nxos/               Generated NX-OS, committed
+rendered/iosxe/              Generated DMVPN IOS-XE, committed
+rendered/iosxr/              Generated IOS XR SP Core, committed
+rendered/enterprise/         Generated PE + Data Center IOS-XE/IOL, committed
+rendered/sdwan/              Generated SD-WAN cEdge + controller cloud-init, committed
+inventory/hosts.yml          Documentation inventory (TEST-NET addresses)
+nac/validate.py              Offline checks against the source of truth
+nac/collect.py               Optional Netmiko collector, not used by CI
+tests/test_nac.py            Unit tests
 ```
 
 `rendered/` is a build artifact that is checked in so a reader can see the output without installing Ansible. CI re-renders and fails if the committed files drift.
@@ -79,11 +90,26 @@ distribute-list prefix PFX-spoke-north gateway GW-spoke-north in
 
 NBMA addresses are documentation ranges (`203.0.113.0/24`, `198.51.100.0/24`, `192.0.2.0/24`).
 
+## What the Enterprise Core, SP, & SD-WAN data means
+
+`data/enterprise_core.yml` models the IPv4-only shared enterprise backbone used across the CCIE lab series:
+
+| Tier | Nodes | Image / Platform | Routing & Role |
+| --- | --- | --- | --- |
+| SP Core | `P1`, `P2` | `iosxrv9000` | OSPF Area 0 + LDP + BGP VPNv4 Route Reflectors (`neighbor-group RR-CLIENTS`, AS 65500) |
+| SP Edge | `PE1`–`PE4` | `cat8000v` (`c8000V_Edge_Autonomous`) | OSPF + LDP + MP-BGP VPNv4; VRF `CUST` to branch/DC WAN and `SDWAN-INET`/`SDWAN-MPLS` on `PE4` |
+| DC DMVPN Hub | `DC-R1` | `csr1000v` (`csr1000V_Edge_Autonomous`) | Phase 3 DMVPN Hub (`Tunnel10`, `10.19.0.1/24`, FVRF `INET`, IKEv2/IPsec, EIGRP AS 210 ↔ OSPF 10) |
+| DC WAN & GW | `DC-R2`–`DC-R4` | `iol-xe` | `DC-R2`/`DC-R3` eBGP AS 65200 ↔ `PE3` VRF `CUST`; `DC-R4` OSPF 10 ↔ `DC-CEDGE1/2` VPN 10 |
+| DC Switching | `DC-SW1`–`DC-SW4` | `ioll2-xe` | `DC-SW1`/`DC-SW2` L3 distribution with HSRP (VLANs 10/20/99) + OSPF 10; `DC-SW3`/`DC-SW4` access |
+| SD-WAN | `SDWAN-MGR`, `SDWAN-VAL`, `SDWAN-CTRL`, `DC-CEDGE1`–`2` | Catalyst SD-WAN 20.16.1 / 17.16.01a | Control plane on `172.31.0.0/24` (`VPN 0`) and dual-transport (`biz-internet` + `mpls`) cEdges |
+
+All configs enforce `ipv4_only: true` and replace secrets/PSK/OTP values with `REDACTED-FROM-VAULT`.
+
 ## Secrets
 
-The rendered IOS-XE contains `pre-shared-key REDACTED-FROM-VAULT` and the same placeholder for NHRP authentication. That string is not a key. Tests fail if a config contains `password`, `secret`, `cisco123`, or a pre-shared key other than the placeholder.
+The rendered IOS-XE and SD-WAN configs contain `REDACTED-FROM-VAULT` for PSK, NHRP authentication, and SD-WAN OTP values. That string is not a key. Tests fail if a config contains `password`, `secret`, `cisco123`, or a pre-shared key other than the placeholder.
 
-Put a real key in Ansible Vault and pass it into the template at deploy time. Do not commit it.
+Put real keys and credentials in Ansible Vault and pass them into the templates at deploy time. Do not commit them.
 
 ## CI
 
@@ -115,6 +141,7 @@ Credentials come from the environment, not from the command line and not from th
 - Add a leaf by adding a device, its `/31` links on both ends, and a VTEP loopback. Re-render. The spine template picks up new route-reflector clients on its own.
 - Add a VNI in `vnis`. Leaves and border gateways grow the VLAN, the NVE member, and the EVPN stanza.
 - Add a spoke in `dmvpn.yml` with a `lan_prefix`. The hub template grows the prefix-lists and the gateway filter.
+- Add a PE or DC edge node in `data/enterprise_core.yml` and re-run `ansible-playbook playbooks/render.yml`.
 
 ## License
 

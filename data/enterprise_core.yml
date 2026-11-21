@@ -1,0 +1,407 @@
+---
+ipv4_only: true
+sp_asn: 65500
+dc_asn: 65200
+cluster_id: 100.64.0.100
+sdwan_org: CCIE-LAB
+placeholder_token: REDACTED-FROM-VAULT
+dmvpn_dc:
+  network_id: 110
+  tunnel_key: 110
+  tunnel_subnet: 10.19.0.0/24
+  tunnel_mask: 255.255.255.0
+  eigrp_asn: 210
+  eigrp_name: DC-DMVPN
+sp_p_routers:
+  - hostname: P1
+    node_definition: iosxrv9000
+    ram_mb: 16384
+    cpus: 4
+    router_id: 100.64.0.1
+    peer_rr: 100.64.0.2
+    interfaces:
+      - name: GigabitEthernet0/0/0/0
+        description: to P2 Gi0/0/0/0
+        address: 100.64.10.1
+        mask: 255.255.255.252
+      - name: GigabitEthernet0/0/0/1
+        description: to PE1 Gi1
+        address: 100.64.10.5
+        mask: 255.255.255.252
+      - name: GigabitEthernet0/0/0/2
+        description: to PE2 Gi1
+        address: 100.64.10.9
+        mask: 255.255.255.252
+      - name: GigabitEthernet0/0/0/3
+        description: to PE3 Gi1
+        address: 100.64.10.13
+        mask: 255.255.255.252
+      - name: GigabitEthernet0/0/0/4
+        description: to PE4 Gi1
+        address: 100.64.10.17
+        mask: 255.255.255.252
+    clients:
+      - 100.64.0.11
+      - 100.64.0.12
+      - 100.64.0.13
+      - 100.64.0.14
+  - hostname: P2
+    node_definition: iosxrv9000
+    ram_mb: 16384
+    cpus: 4
+    router_id: 100.64.0.2
+    peer_rr: 100.64.0.1
+    interfaces:
+      - name: GigabitEthernet0/0/0/0
+        description: to P1 Gi0/0/0/0
+        address: 100.64.10.2
+        mask: 255.255.255.252
+      - name: GigabitEthernet0/0/0/1
+        description: to PE1 Gi2
+        address: 100.64.10.21
+        mask: 255.255.255.252
+      - name: GigabitEthernet0/0/0/2
+        description: to PE2 Gi2
+        address: 100.64.10.25
+        mask: 255.255.255.252
+      - name: GigabitEthernet0/0/0/3
+        description: to PE3 Gi2
+        address: 100.64.10.29
+        mask: 255.255.255.252
+      - name: GigabitEthernet0/0/0/4
+        description: to PE4 Gi2
+        address: 100.64.10.33
+        mask: 255.255.255.252
+    clients:
+      - 100.64.0.11
+      - 100.64.0.12
+      - 100.64.0.13
+      - 100.64.0.14
+sp_pe_routers:
+  - hostname: PE1
+    node_definition: cat8000v
+    image_definition: c8000V_Edge_Autonomous
+    ram_mb: 4096
+    router_id: 100.64.0.11
+    core_links:
+      - name: GigabitEthernet1
+        description: to P1 Gi0/0/0/1
+        address: 100.64.10.6
+        mask: 255.255.255.252
+      - name: GigabitEthernet2
+        description: to P2 Gi0/0/0/1
+        address: 100.64.10.22
+        mask: 255.255.255.252
+    vrfs:
+      - name: CUST
+        rd: "65500:100"
+        rt: "65500:100"
+  - hostname: PE2
+    node_definition: cat8000v
+    image_definition: c8000V_Edge_Autonomous
+    ram_mb: 4096
+    router_id: 100.64.0.12
+    core_links:
+      - name: GigabitEthernet1
+        description: to P1 Gi0/0/0/2
+        address: 100.64.10.10
+        mask: 255.255.255.252
+      - name: GigabitEthernet2
+        description: to P2 Gi0/0/0/2
+        address: 100.64.10.26
+        mask: 255.255.255.252
+    vrfs:
+      - name: CUST
+        rd: "65500:100"
+        rt: "65500:100"
+  - hostname: PE3
+    node_definition: cat8000v
+    image_definition: c8000V_Edge_Autonomous
+    ram_mb: 4096
+    router_id: 100.64.0.13
+    core_links:
+      - name: GigabitEthernet1
+        description: to P1 Gi0/0/0/3
+        address: 100.64.10.14
+        mask: 255.255.255.252
+      - name: GigabitEthernet2
+        description: to P2 Gi0/0/0/3
+        address: 100.64.10.30
+        mask: 255.255.255.252
+    vrfs:
+      - name: CUST
+        rd: "65500:100"
+        rt: "65500:100"
+    vrf_interfaces:
+      - name: GigabitEthernet3
+        vrf: CUST
+        description: to DC-R2 Et0/1
+        address: 10.200.2.1
+        mask: 255.255.255.252
+      - name: GigabitEthernet4
+        vrf: CUST
+        description: to DC-R3 Et0/1
+        address: 10.200.2.5
+        mask: 255.255.255.252
+    ebgp_vrf_neighbors:
+      - vrf: CUST
+        peer: 10.200.2.2
+        remote_as: 65200
+      - vrf: CUST
+        peer: 10.200.2.6
+        remote_as: 65200
+  - hostname: PE4
+    node_definition: cat8000v
+    image_definition: c8000V_Edge_Autonomous
+    ram_mb: 4096
+    router_id: 100.64.0.14
+    core_links:
+      - name: GigabitEthernet1
+        description: to P1 Gi0/0/0/4
+        address: 100.64.10.18
+        mask: 255.255.255.252
+      - name: GigabitEthernet2
+        description: to P2 Gi0/0/0/4
+        address: 100.64.10.34
+        mask: 255.255.255.252
+    vrfs:
+      - name: CUST
+        rd: "65500:100"
+        rt: "65500:100"
+      - name: SDWAN-INET
+        rd: "65500:200"
+        rt: "65500:200"
+      - name: SDWAN-MPLS
+        rd: "65500:201"
+        rt: "65500:201"
+    vrf_interfaces:
+      - name: GigabitEthernet3
+        vrf: SDWAN-MPLS
+        description: to MPLS-SW port0
+        address: 172.31.2.254
+        mask: 255.255.255.0
+      - name: GigabitEthernet4
+        vrf: SDWAN-INET
+        description: to VPN0-SW port0
+        address: 172.31.0.254
+        mask: 255.255.255.0
+dc_routers:
+  - hostname: DC-R1
+    role: dc_dmvpn_hub
+    node_definition: csr1000v
+    image_definition: csr1000V_Edge_Autonomous
+    ram_mb: 3072
+    router_id: 10.200.255.1
+    tunnel_address: 10.19.0.1
+    wan_interface: GigabitEthernet4
+    wan_address: 172.31.0.200
+    wan_mask: 255.255.255.0
+    wan_gateway: 172.31.0.254
+    interfaces:
+      - name: GigabitEthernet1
+        description: to DC-SW1 Et0/3
+        address: 10.200.1.2
+        mask: 255.255.255.252
+      - name: GigabitEthernet2
+        description: to DC-SW2 Et0/3
+        address: 10.200.1.6
+        mask: 255.255.255.252
+  - hostname: DC-R2
+    role: dc_wan
+    node_definition: iol-xe
+    ram_mb: 1024
+    router_id: 10.200.255.2
+    pe_peer: 10.200.2.1
+    ibgp_peer: 10.200.255.3
+    interfaces:
+      - name: Ethernet0/1
+        description: to PE3 Gi3
+        address: 10.200.2.2
+        mask: 255.255.255.252
+        ospf: false
+      - name: Ethernet0/2
+        description: to DC-SW1 Et0/1
+        address: 10.200.1.9
+        mask: 255.255.255.252
+        ospf: true
+      - name: Ethernet0/3
+        description: to DC-SW2 Et0/1
+        address: 10.200.1.13
+        mask: 255.255.255.252
+        ospf: true
+      - name: Ethernet1/0
+        description: to DC-R3 Et1/0
+        address: 10.200.1.33
+        mask: 255.255.255.252
+        ospf: true
+  - hostname: DC-R3
+    role: dc_wan
+    node_definition: iol-xe
+    ram_mb: 1024
+    router_id: 10.200.255.3
+    pe_peer: 10.200.2.5
+    ibgp_peer: 10.200.255.2
+    interfaces:
+      - name: Ethernet0/1
+        description: to PE3 Gi4
+        address: 10.200.2.6
+        mask: 255.255.255.252
+        ospf: false
+      - name: Ethernet0/2
+        description: to DC-SW1 Et0/2
+        address: 10.200.1.17
+        mask: 255.255.255.252
+        ospf: true
+      - name: Ethernet0/3
+        description: to DC-SW2 Et0/2
+        address: 10.200.1.21
+        mask: 255.255.255.252
+        ospf: true
+      - name: Ethernet1/0
+        description: to DC-R2 Et1/0
+        address: 10.200.1.34
+        mask: 255.255.255.252
+        ospf: true
+  - hostname: DC-R4
+    role: dc_sdwan_gw
+    node_definition: iol-xe
+    ram_mb: 1024
+    router_id: 10.200.255.4
+    interfaces:
+      - name: Ethernet0/1
+        description: to DC-SW1 Et1/0
+        address: 10.200.1.25
+        mask: 255.255.255.252
+        ospf: true
+      - name: Ethernet0/2
+        description: to DC-SW2 Et1/0
+        address: 10.200.1.29
+        mask: 255.255.255.252
+        ospf: true
+      - name: Ethernet0/3
+        description: to DC-CEDGE1 Gi3 (VPN 10)
+        address: 10.200.30.1
+        mask: 255.255.255.252
+        ospf: true
+      - name: Ethernet1/0
+        description: to DC-CEDGE2 Gi3 (VPN 10)
+        address: 10.200.31.1
+        mask: 255.255.255.252
+        ospf: true
+dc_switches:
+  - hostname: DC-SW1
+    role: dist
+    node_definition: ioll2-xe
+    ram_mb: 1024
+    router_id: 10.200.255.11
+    hsrp_prio: 110
+    mgmt_ip: 10.200.99.2
+    vlan_octet: 2
+    uplinks:
+      - name: Ethernet0/1
+        description: to DC-R2 Et0/2
+        address: 10.200.1.10
+        mask: 255.255.255.252
+      - name: Ethernet0/2
+        description: to DC-R3 Et0/2
+        address: 10.200.1.18
+        mask: 255.255.255.252
+      - name: Ethernet0/3
+        description: to DC-R1 Gi1
+        address: 10.200.1.1
+        mask: 255.255.255.252
+      - name: Ethernet1/0
+        description: to DC-R4 Et0/1
+        address: 10.200.1.26
+        mask: 255.255.255.252
+  - hostname: DC-SW2
+    role: dist
+    node_definition: ioll2-xe
+    ram_mb: 1024
+    router_id: 10.200.255.12
+    hsrp_prio: 90
+    mgmt_ip: 10.200.99.3
+    vlan_octet: 3
+    uplinks:
+      - name: Ethernet0/1
+        description: to DC-R2 Et0/3
+        address: 10.200.1.14
+        mask: 255.255.255.252
+      - name: Ethernet0/2
+        description: to DC-R3 Et0/3
+        address: 10.200.1.22
+        mask: 255.255.255.252
+      - name: Ethernet0/3
+        description: to DC-R1 Gi2
+        address: 10.200.1.5
+        mask: 255.255.255.252
+      - name: Ethernet1/0
+        description: to DC-R4 Et0/2
+        address: 10.200.1.30
+        mask: 255.255.255.252
+  - hostname: DC-SW3
+    role: access
+    node_definition: ioll2-xe
+    ram_mb: 1024
+    mgmt_ip: 10.200.99.13
+    access_vlan: 10
+  - hostname: DC-SW4
+    role: access
+    node_definition: ioll2-xe
+    ram_mb: 1024
+    mgmt_ip: 10.200.99.14
+    access_vlan: 20
+sdwan_cedges:
+  - hostname: DC-CEDGE1
+    node_definition: cat-sdwan-edge
+    image_definition: cat-sdwan-edge-17-16-01a
+    ram_mb: 4096
+    system_ip: 172.31.255.101
+    site_id: 200
+    inet_ip: 172.31.0.101
+    mpls_ip: 172.31.2.101
+    svc_ip: 10.200.30.2
+    svc_nh: 10.200.30.1
+    uuid: C8K-00000000-0000-0000-0000-000000000001
+  - hostname: DC-CEDGE2
+    node_definition: cat-sdwan-edge
+    image_definition: cat-sdwan-edge-17-16-01a
+    ram_mb: 4096
+    system_ip: 172.31.255.102
+    site_id: 200
+    inet_ip: 172.31.0.102
+    mpls_ip: 172.31.2.102
+    svc_ip: 10.200.31.2
+    svc_nh: 10.200.31.1
+    uuid: C8K-00000000-0000-0000-0000-000000000002
+sdwan_controllers:
+  - hostname: SDWAN-MGR
+    personality: vmanage
+    device_model: vmanage
+    node_definition: cat-sdwan-manager
+    image_definition: cat-sdwan-manager-20-16-1
+    ram_mb: 16384
+    system_ip: 172.31.255.10
+    vpn0_if: eth1
+    vpn0_ip: 172.31.0.10/24
+    site_id: 100
+  - hostname: SDWAN-VAL
+    personality: vedge
+    device_model: vedge-cloud
+    node_definition: cat-sdwan-validator
+    image_definition: cat-sdwan-validator-20-16-1
+    ram_mb: 2048
+    system_ip: 172.31.255.20
+    vpn0_if: ge0/0
+    vpn0_ip: 172.31.0.20/24
+    site_id: 100
+  - hostname: SDWAN-CTRL
+    personality: vsmart
+    device_model: vsmart
+    node_definition: cat-sdwan-controller
+    image_definition: cat-sdwan-controller-20-16-1
+    ram_mb: 4096
+    system_ip: 172.31.255.30
+    vpn0_if: eth1
+    vpn0_ip: 172.31.0.30/24
+    site_id: 100

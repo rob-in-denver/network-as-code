@@ -14,6 +14,11 @@
         file: "{{ playbook_dir }}/../data/dmvpn.yml"
         name: dmvpn
 
+    - name: Load the enterprise SP, DC, and SD-WAN core
+      ansible.builtin.include_vars:
+        file: "{{ playbook_dir }}/../data/enterprise_core.yml"
+        name: enterprise
+
     - name: Create render directories
       ansible.builtin.file:
         path: "{{ playbook_dir }}/../rendered/{{ item }}"
@@ -22,6 +27,9 @@
       loop:
         - nxos
         - iosxe
+        - iosxr
+        - enterprise
+        - sdwan
 
     - name: Render NX-OS fabric devices
       ansible.builtin.template:
@@ -38,6 +46,60 @@
         dest: "{{ playbook_dir }}/../rendered/iosxe/{{ item.hostname }}.cfg"
         mode: "0644"
       loop: "{{ dmvpn.hubs + dmvpn.spokes }}"
+      vars:
+        device: "{{ item }}"
+
+    - name: Render IOS XR SP core P/RR routers
+      ansible.builtin.template:
+        src: "{{ playbook_dir }}/../templates/iosxr/sp_p.j2"
+        dest: "{{ playbook_dir }}/../rendered/iosxr/{{ item.hostname }}.cfg"
+        mode: "0644"
+      loop: "{{ enterprise.sp_p_routers }}"
+      vars:
+        device: "{{ item }}"
+
+    - name: Render Cat8000v SP PE routers
+      ansible.builtin.template:
+        src: "{{ playbook_dir }}/../templates/iosxe/sp_pe.j2"
+        dest: "{{ playbook_dir }}/../rendered/enterprise/{{ item.hostname }}.cfg"
+        mode: "0644"
+      loop: "{{ enterprise.sp_pe_routers }}"
+      vars:
+        device: "{{ item }}"
+
+    - name: Render Data Center routers
+      ansible.builtin.template:
+        src: "{{ playbook_dir }}/../templates/iosxe/dc_router.j2"
+        dest: "{{ playbook_dir }}/../rendered/enterprise/{{ item.hostname }}.cfg"
+        mode: "0644"
+      loop: "{{ enterprise.dc_routers }}"
+      vars:
+        device: "{{ item }}"
+
+    - name: Render Data Center switches
+      ansible.builtin.template:
+        src: "{{ playbook_dir }}/../templates/iosxe/dc_switch.j2"
+        dest: "{{ playbook_dir }}/../rendered/enterprise/{{ item.hostname }}.cfg"
+        mode: "0644"
+      loop: "{{ enterprise.dc_switches }}"
+      vars:
+        device: "{{ item }}"
+
+    - name: Render SD-WAN Catalyst cEdge cloud-init configs
+      ansible.builtin.template:
+        src: "{{ playbook_dir }}/../templates/sdwan/cedge.j2"
+        dest: "{{ playbook_dir }}/../rendered/sdwan/{{ item.hostname }}.cfg"
+        mode: "0644"
+      loop: "{{ enterprise.sdwan_cedges }}"
+      vars:
+        device: "{{ item }}"
+
+    - name: Render SD-WAN controller cloud-init configs
+      ansible.builtin.template:
+        src: "{{ playbook_dir }}/../templates/sdwan/controller.j2"
+        dest: "{{ playbook_dir }}/../rendered/sdwan/{{ item.hostname }}.yaml"
+        mode: "0644"
+      loop: "{{ enterprise.sdwan_controllers }}"
       vars:
         device: "{{ item }}"
 

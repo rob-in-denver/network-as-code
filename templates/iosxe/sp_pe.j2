@@ -1,0 +1,69 @@
+hostname {{ device.hostname }}
+no ip domain lookup
+ip domain name ccie.lab
+!
+{% for vrf in device.vrfs %}
+vrf definition {{ vrf.name }}
+ rd {{ vrf.rd }}
+ address-family ipv4
+  route-target export {{ vrf.rt }}
+  route-target import {{ vrf.rt }}
+ exit-address-family
+!
+{% endfor %}
+mpls ldp router-id Loopback0 force
+!
+interface Loopback0
+ description SP PE RID
+ ip address {{ device.router_id }} 255.255.255.255
+ ip ospf 1 area 0
+ no shutdown
+!
+{% for intf in device.core_links %}
+interface {{ intf.name }}
+ description {{ intf.description }}
+ ip address {{ intf.address }} {{ intf.mask }}
+ ip ospf network point-to-point
+ ip ospf 1 area 0
+ mpls ip
+ no shutdown
+!
+{% endfor %}
+{% for intf in device.vrf_interfaces | default([]) %}
+interface {{ intf.name }}
+ description {{ intf.description }}
+ vrf forwarding {{ intf.vrf }}
+ ip address {{ intf.address }} {{ intf.mask }}
+ no shutdown
+!
+{% endfor %}
+router ospf 1
+ router-id {{ device.router_id }}
+ passive-interface Loopback0
+ auto-cost reference-bandwidth 10000
+!
+router bgp {{ enterprise.sp_asn }}
+ bgp router-id {{ device.router_id }}
+ bgp log-neighbor-changes
+ no bgp default ipv4-unicast
+ neighbor 100.64.0.1 remote-as {{ enterprise.sp_asn }}
+ neighbor 100.64.0.1 update-source Loopback0
+ neighbor 100.64.0.2 remote-as {{ enterprise.sp_asn }}
+ neighbor 100.64.0.2 update-source Loopback0
+ !
+ address-family vpnv4
+  neighbor 100.64.0.1 activate
+  neighbor 100.64.0.1 send-community extended
+  neighbor 100.64.0.2 activate
+  neighbor 100.64.0.2 send-community extended
+ exit-address-family
+{% for nbr in device.ebgp_vrf_neighbors | default([]) %}
+ !
+ address-family ipv4 vrf {{ nbr.vrf }}
+  neighbor {{ nbr.peer }} remote-as {{ nbr.remote_as }}
+  neighbor {{ nbr.peer }} activate
+  neighbor {{ nbr.peer }} as-override
+ exit-address-family
+{% endfor %}
+!
+end

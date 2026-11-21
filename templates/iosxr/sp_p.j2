@@ -1,0 +1,60 @@
+hostname {{ device.hostname }}
+domain name ccie.lab
+domain lookup disable
+!
+interface Loopback0
+ description SP Core RR RID
+ ipv4 address {{ device.router_id }} 255.255.255.255
+!
+{% for intf in device.interfaces %}
+interface {{ intf.name }}
+ description {{ intf.description }}
+ ipv4 address {{ intf.address }} {{ intf.mask }}
+ no shutdown
+!
+{% endfor %}
+router ospf 1
+ router-id {{ device.router_id }}
+ area 0
+  interface Loopback0
+   passive enable
+  !
+{% for intf in device.interfaces %}
+  interface {{ intf.name }}
+   network point-to-point
+  !
+{% endfor %}
+ !
+!
+mpls ldp
+ router-id {{ device.router_id }}
+{% for intf in device.interfaces %}
+ interface {{ intf.name }}
+ !
+{% endfor %}
+!
+router bgp {{ enterprise.sp_asn }}
+ bgp router-id {{ device.router_id }}
+ bgp cluster-id {{ enterprise.cluster_id }}
+ address-family vpnv4 unicast
+ !
+ neighbor-group RR-CLIENTS
+  remote-as {{ enterprise.sp_asn }}
+  update-source Loopback0
+  address-family vpnv4 unicast
+   route-reflector-client
+  !
+ !
+ neighbor {{ device.peer_rr }}
+  remote-as {{ enterprise.sp_asn }}
+  update-source Loopback0
+  address-family vpnv4 unicast
+  !
+ !
+{% for client in device.clients %}
+ neighbor {{ client }}
+  use neighbor-group RR-CLIENTS
+ !
+{% endfor %}
+!
+end

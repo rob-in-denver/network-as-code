@@ -1,0 +1,75 @@
+hostname {{ device.hostname }}
+no ip domain lookup
+ip domain name ccie.lab
+!
+vlan 10
+ name DC-SERVERS
+vlan 20
+ name DC-APPS
+vlan 99
+ name DC-MGMT
+!
+{% if device.role == "dist" %}
+ip routing
+!
+interface Loopback0
+ description {{ device.hostname }} RID
+ ip address {{ device.router_id }} 255.255.255.255
+ ip ospf 10 area 0
+ no shutdown
+!
+{% for intf in device.uplinks %}
+interface {{ intf.name }}
+ no switchport
+ description {{ intf.description }}
+ ip address {{ intf.address }} {{ intf.mask }}
+ ip ospf network point-to-point
+ ip ospf 10 area 0
+ no shutdown
+!
+{% endfor %}
+interface Vlan10
+ description DC-SERVERS SVI
+ ip address 10.200.10.{{ device.vlan_octet }} 255.255.255.0
+ standby 10 ip 10.200.10.1
+ standby 10 priority {{ device.hsrp_prio }}
+ standby 10 preempt
+ ip ospf 10 area 0
+ no shutdown
+!
+interface Vlan20
+ description DC-APPS SVI
+ ip address 10.200.20.{{ device.vlan_octet }} 255.255.255.0
+ standby 20 ip 10.200.20.1
+ standby 20 priority {{ device.hsrp_prio }}
+ standby 20 preempt
+ ip ospf 10 area 0
+ no shutdown
+!
+interface Vlan99
+ description DC-MGMT SVI
+ ip address {{ device.mgmt_ip }} 255.255.255.0
+ standby 99 ip 10.200.99.1
+ standby 99 priority {{ device.hsrp_prio }}
+ standby 99 preempt
+ ip ospf 10 area 0
+ no shutdown
+!
+router ospf 10
+ router-id {{ device.router_id }}
+ passive-interface Loopback0
+ passive-interface Vlan10
+ passive-interface Vlan20
+ passive-interface Vlan99
+ auto-cost reference-bandwidth 10000
+!
+{% else %}
+interface Vlan99
+ description DC-MGMT SVI
+ ip address {{ device.mgmt_ip }} 255.255.255.0
+ no shutdown
+!
+ip default-gateway 10.200.99.1
+!
+{% endif %}
+end

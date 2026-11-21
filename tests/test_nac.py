@@ -3,10 +3,11 @@ from pathlib import Path
 import pytest
 
 from nac.collect import collect_running_config
-from nac.validate import ROOT, check_dmvpn, check_secrets, load_yaml, validate_all
+from nac.validate import ROOT, check_dmvpn, check_enterprise, check_secrets, load_yaml, validate_all
 
 DMVPN = load_yaml(ROOT / "data" / "dmvpn.yml")
 SPOKE = DMVPN["spokes"][0]
+ENTERPRISE = load_yaml(ROOT / "data" / "enterprise_core.yml")
 
 
 def test_source_of_truth_matches_rendered_configs():
@@ -42,6 +43,26 @@ def test_rendered_tree_covers_every_device():
     fabric = load_yaml(ROOT / "data" / "fabric.yml")
     nxos = {path.stem for path in (ROOT / "rendered" / "nxos").glob("*.cfg")}
     ios = {path.stem for path in (ROOT / "rendered" / "iosxe").glob("*.cfg")}
+    iosxr = {path.stem for path in (ROOT / "rendered" / "iosxr").glob("*.cfg")}
+    enterprise = {path.stem for path in (ROOT / "rendered" / "enterprise").glob("*.cfg")}
+    sdwan_cedges = {path.stem for path in (ROOT / "rendered" / "sdwan").glob("*.cfg")}
+    sdwan_ctrls = {path.stem for path in (ROOT / "rendered" / "sdwan").glob("*.yaml")}
+
     assert nxos == {device["hostname"] for device in fabric["devices"]}
     assert ios == {device["hostname"] for device in DMVPN["hubs"] + DMVPN["spokes"]}
+    assert iosxr == {device["hostname"] for device in ENTERPRISE["sp_p_routers"]}
+    assert enterprise == {
+        device["hostname"]
+        for device in ENTERPRISE["sp_pe_routers"] + ENTERPRISE["dc_routers"] + ENTERPRISE["dc_switches"]
+    }
+    assert sdwan_cedges == {device["hostname"] for device in ENTERPRISE["sdwan_cedges"]}
+    assert sdwan_ctrls == {device["hostname"] for device in ENTERPRISE["sdwan_controllers"]}
     assert not list(Path(ROOT / "rendered").rglob("*password*"))
+
+
+def test_enterprise_core_is_ipv4_only_and_dc_hub_terminates_dmvpn():
+    assert ENTERPRISE["ipv4_only"] is True
+    assert check_enterprise(ROOT, ENTERPRISE) == []
+    dc_r1 = (ROOT / "rendered" / "enterprise" / "DC-R1.cfg").read_text()
+    assert "ip nhrp redirect" in dc_r1
+    assert "tunnel vrf INET" in dc_r1

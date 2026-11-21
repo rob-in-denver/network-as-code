@@ -1,0 +1,54 @@
+#cloud-config
+write_files:
+- path: /etc/default/personality
+  content: "vsmart\n"
+- path: /etc/default/inited
+  content: "1\n"
+- path: /etc/confd/init/zcloud.xml
+  content: |
+    <config xmlns="http://tail-f.com/ns/config/1.0">
+      <system xmlns="http://viptela.com/system">
+        <personality>vsmart</personality>
+        <device-model>vsmart</device-model>
+        <organization-name>CCIE-LAB</organization-name>
+        <sp-organization-name>CCIE-LAB</sp-organization-name>
+        <vbond>
+          <remote>172.31.0.20</remote>
+          <port>12346</port>
+        </vbond>
+        <site-id>100</site-id>
+        <system-ip>172.31.255.30</system-ip>
+        <host-name>SDWAN-CTRL</host-name>
+        <domain-id>1</domain-id>
+        <!-- admin credentials injected from Ansible Vault at deploy time -->
+      </system>
+      <vpn xmlns="http://viptela.com/vpn">
+        <vpn-instance>
+          <vpn-id>0</vpn-id>
+          <ip>
+            <route>
+              <prefix>0.0.0.0/0</prefix>
+              <next-hop>
+                <address>172.31.0.254</address>
+              </next-hop>
+            </route>
+          </ip>
+          <interface>
+            <if-name>eth1</if-name>
+            <ip>
+              <address>172.31.0.30/24</address>
+            </ip>
+            <tunnel-interface>
+              <encapsulation>
+                <encap>ipsec</encap>
+              </encapsulation>
+              <allow-service>
+                <sshd>true</sshd>
+                <netconf>true</netconf>
+              </allow-service>
+            </tunnel-interface>
+            <shutdown>false</shutdown>
+          </interface>
+        </vpn-instance>
+      </vpn>
+    </config>

@@ -1,0 +1,57 @@
+#cloud-config
+write_files:
+- path: /etc/default/personality
+  content: "{{ device.personality }}\n"
+- path: /etc/default/inited
+  content: "1\n"
+- path: /etc/confd/init/zcloud.xml
+  content: |
+    <config xmlns="http://tail-f.com/ns/config/1.0">
+      <system xmlns="http://viptela.com/system">
+        <personality>{{ device.personality }}</personality>
+        <device-model>{{ device.device_model }}</device-model>
+        <organization-name>{{ enterprise.sdwan_org }}</organization-name>
+        <sp-organization-name>{{ enterprise.sdwan_org }}</sp-organization-name>
+        <vbond>
+{% if device.personality == "vedge" %}
+          <local></local>
+{% endif %}
+          <remote>172.31.0.20</remote>
+          <port>12346</port>
+        </vbond>
+        <site-id>{{ device.site_id }}</site-id>
+        <system-ip>{{ device.system_ip }}</system-ip>
+        <host-name>{{ device.hostname }}</host-name>
+        <domain-id>1</domain-id>
+        <!-- admin credentials injected from Ansible Vault at deploy time -->
+      </system>
+      <vpn xmlns="http://viptela.com/vpn">
+        <vpn-instance>
+          <vpn-id>0</vpn-id>
+          <ip>
+            <route>
+              <prefix>0.0.0.0/0</prefix>
+              <next-hop>
+                <address>172.31.0.254</address>
+              </next-hop>
+            </route>
+          </ip>
+          <interface>
+            <if-name>{{ device.vpn0_if }}</if-name>
+            <ip>
+              <address>{{ device.vpn0_ip }}</address>
+            </ip>
+            <tunnel-interface>
+              <encapsulation>
+                <encap>ipsec</encap>
+              </encapsulation>
+              <allow-service>
+                <sshd>true</sshd>
+                <netconf>true</netconf>
+              </allow-service>
+            </tunnel-interface>
+            <shutdown>false</shutdown>
+          </interface>
+        </vpn-instance>
+      </vpn>
+    </config>
