@@ -53,6 +53,7 @@ inventory/hosts.yml          Documentation inventory (TEST-NET addresses)
 nac/validate.py              Offline checks against the source of truth
 nac/collect.py               Optional Netmiko collector, not used by CI
 tests/test_nac.py            Unit tests
+docs/vxlan-evpn-cml-labs.md  Summary of the related CML VXLAN EVPN lab series
 ```
 
 `rendered/` is a build artifact that is checked in so a reader can see the output without installing Ansible. CI re-renders and fails if the committed files drift.
@@ -107,6 +108,10 @@ NBMA addresses are documentation ranges (`203.0.113.0/24`, `198.51.100.0/24`, `1
 | SD-WAN edges | `DC-CEDGE1/2` (site 200), `S1..S3-EDGE` (sites 301–303) | `cat-sdwan-vedge` (`vedge_20.12.8`) | vEdge Cloud day-0: `biz-internet` (ISP) + `mpls restrict` (SP PE) in VPN 0, VPN 512 mgmt, VPN 10 service LAN. A later move to IOS-XE SD-WAN cEdges needs c8000v 17.12.x |
 
 All configs enforce `ipv4_only: true` and replace secrets/PSK/OTP values with `REDACTED-FROM-VAULT`.
+
+## Related CML labs
+
+The `data/fabric.yml` example above is the compact source of truth in this repository. A larger Cisco Modeling Labs package uses the same VXLAN EVPN multi-site idea as a practice series (two NX-OS fabrics, an MPLS L3VPN provider, and a grader). The four lab variants, including **Lab 4 — Underlay start** (a 4-hour build from a connected IPv4 underlay to intra-fabric and inter-site MP-BGP EVPN), are summarised in [docs/vxlan-evpn-cml-labs.md](docs/vxlan-evpn-cml-labs.md). The CML files and answer keys are not published in this repository.
 
 ## Secrets
 
