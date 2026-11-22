@@ -113,6 +113,8 @@ All configs enforce `ipv4_only: true` and replace secrets/PSK/OTP values with `R
 
 The `data/fabric.yml` example above is the compact source of truth in this repository. A larger Cisco Modeling Labs package uses the same VXLAN EVPN multi-site idea as a practice series (two NX-OS fabrics, an MPLS L3VPN provider, and a grader). The four lab variants, including **Lab 4 — Underlay start** (a 4-hour build from a connected IPv4 underlay to intra-fabric and inter-site MP-BGP EVPN), are summarised in [docs/vxlan-evpn-cml-labs.md](docs/vxlan-evpn-cml-labs.md). The CML files and answer keys are not published in this repository.
 
+A companion CCIE-style lab covers Cisco Resilient Ethernet Protocol on two parallel rings of six Catalyst 9000v switches, with an IOL-L2 STP/legacy domain. It is summarised in [docs/rep-dualring-cml-lab.md](docs/rep-dualring-cml-lab.md).
+
 ## Secrets
 
 The rendered IOS-XE and SD-WAN configs contain `REDACTED-FROM-VAULT` for PSK, NHRP authentication, and SD-WAN OTP values. That string is not a key. Tests fail if a config contains `password`, `secret`, `cisco123`, or a pre-shared key other than the placeholder.
