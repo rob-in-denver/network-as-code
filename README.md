@@ -115,6 +115,8 @@ The `data/fabric.yml` example above is the compact source of truth in this repos
 
 A companion CCIE-style lab covers Cisco Resilient Ethernet Protocol on two parallel rings of six Catalyst 9000v switches, with an IOL-L2 STP/legacy domain. It is summarised in [docs/rep-dualring-cml-lab.md](docs/rep-dualring-cml-lab.md).
 
+A further lab covers 802.1Q tunneling (QinQ) with six edge sites, `dot1q-tunnel` access switches and a core that maps one customer C-VLAN to several provider S-VLANs with EVC service instances. It is summarised in [docs/qinq-1ton-cml-lab.md](docs/qinq-1ton-cml-lab.md).
+
 ## Secrets
 
 The rendered IOS-XE and SD-WAN configs contain `REDACTED-FROM-VAULT` for PSK, NHRP authentication, and SD-WAN OTP values. That string is not a key. Tests fail if a config contains `password`, `secret`, `cisco123`, or a pre-shared key other than the placeholder.
