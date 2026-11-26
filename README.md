@@ -117,6 +117,8 @@ A companion CCIE-style lab covers Cisco Resilient Ethernet Protocol on two paral
 
 A further lab covers 802.1Q tunneling (QinQ) with six edge sites, `dot1q-tunnel` access switches and a core that maps one customer C-VLAN to several provider S-VLANs with EVC service instances. It is summarised in [docs/qinq-1ton-cml-lab.md](docs/qinq-1ton-cml-lab.md).
 
+A related lab keeps the QinQ access edge but terminates three customers (CUST-A, CUST-B, CUST-C) into separate MPLS L3VPN VRFs that reuse the same IPv4 plan, with isolation tests for every customer pair. It ships as a build-from-scratch start, a troubleshooting copy and a solved copy, and is summarised in [docs/qinq-vrf-cml-lab.md](docs/qinq-vrf-cml-lab.md).
+
 ## Secrets
 
 The rendered IOS-XE and SD-WAN configs contain `REDACTED-FROM-VAULT` for PSK, NHRP authentication, and SD-WAN OTP values. That string is not a key. Tests fail if a config contains `password`, `secret`, `cisco123`, or a pre-shared key other than the placeholder.
